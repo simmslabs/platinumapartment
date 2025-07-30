@@ -1,0 +1,250 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  firstName   String
+  lastName    String
+  role        UserRole @default(GUEST)
+  phone       String?
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  bookings    Booking[]
+  reviews     Review[]
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  STAFF
+  GUEST
+}
+
+// Room Management
+model Room {
+  id          String     @id @default(cuid())
+  number      String     @unique
+  type        RoomType
+  status      RoomStatus @default(AVAILABLE)
+  floor       Int
+  capacity    Int
+  pricePerNight Float
+  description String?
+  amenities   String? // JSON string of amenities
+  images      String? // JSON string of image URLs
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  // Relations
+  bookings    Booking[]
+  maintenance MaintenanceLog[]
+}
+
+enum RoomType {
+  SINGLE
+  DOUBLE
+  SUITE
+  DELUXE
+  PRESIDENTIAL
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  OUT_OF_ORDER
+}
+
+// Booking Management
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String
+  roomId      String
+  checkIn     DateTime
+  checkOut    DateTime
+  guests      Int
+  totalAmount Float
+  status      BookingStatus @default(PENDING)
+  specialRequests String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  user        User    @relation(fields: [userId], references: [id])
+  room        Room    @relation(fields: [roomId], references: [id])
+  payment     Payment?
+  services    BookingService[]
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+}
+
+// Payment Management
+model Payment {
+  id          String        @id @default(cuid())
+  bookingId   String        @unique
+  amount      Float
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDING)
+  transactionId String?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  booking     Booking @relation(fields: [bookingId], references: [id])
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  ONLINE
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// Additional Services
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  category    ServiceCategory
+  available   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  bookingServices BookingService[]
+}
+
+enum ServiceCategory {
+  FOOD_BEVERAGE
+  SPA
+  LAUNDRY
+  TRANSPORT
+  ENTERTAINMENT
+  BUSINESS
+  OTHER
+}
+
+model BookingService {
+  id        String   @id @default(cuid())
+  bookingId String
+  serviceId String
+  quantity  Int      @default(1)
+  totalPrice Float
+  createdAt DateTime @default(now())
+  
+  // Relations
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+  
+  @@unique([bookingId, serviceId])
+}
+
+// Maintenance Management
+model MaintenanceLog {
+  id          String            @id @default(cuid())
+  roomId      String
+  type        MaintenanceType
+  description String
+  status      MaintenanceStatus @default(PENDING)
+  priority    Priority          @default(MEDIUM)
+  reportedBy  String?
+  assignedTo  String?
+  startDate   DateTime?
+  endDate     DateTime?
+  cost        Float?
+  notes       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  // Relations
+  room        Room @relation(fields: [roomId], references: [id])
+}
+
+enum MaintenanceType {
+  CLEANING
+  REPAIR
+  INSPECTION
+  UPGRADE
+  PREVENTIVE
+}
+
+enum MaintenanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Guest Reviews
+model Review {
+  id          String   @id @default(cuid())
+  userId      String
+  rating      Int      // 1-5
+  title       String?
+  comment     String?
+  category    ReviewCategory @default(OVERALL)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User @relation(fields: [userId], references: [id])
+}
+
+enum ReviewCategory {
+  OVERALL
+  ROOM
+  SERVICE
+  FOOD
+  LOCATION
+  CLEANLINESS
+}
+
+// Apartment Analytics
+model Analytics {
+  id          String   @id @default(cuid())
+  date        DateTime @unique
+  totalBookings Int    @default(0)
+  totalRevenue Float   @default(0)
+  occupancyRate Float  @default(0)
+  avgRating   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

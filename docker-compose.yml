@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  apartment-app:
+    build:
+      context: .
+      target: production
+    container_name: apartment-management
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:./data/production.db
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - APP_URL=${APP_URL:-http://localhost:3000}
+    volumes:
+      - apartment_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add a reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    container_name: apartment-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - apartment-app
+    restart: unless-stopped
+    profiles:
+      - with-nginx
+
+volumes:
+  apartment_data:
+    driver: local

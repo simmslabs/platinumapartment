@@ -6,8 +6,16 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 import type { LinksFunction } from "@remix-run/node";
+import { MantineProvider, ColorSchemeScript } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
+import { ModalsProvider } from "@mantine/modals";
 
 import "./tailwind.css";
+import "@mantine/core/styles.css";
+import "@mantine/notifications/styles.css";
+import "@mantine/dates/styles.css";
+import "@mantine/dropzone/styles.css";
+import "@mantine/spotlight/styles.css";
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -30,9 +38,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <ColorSchemeScript />
       </head>
       <body>
-        {children}
+        <MantineProvider
+          theme={{
+            primaryColor: "blue",
+            fontFamily: "Inter, sans-serif",
+          }}
+        >
+          <ModalsProvider>
+            <Notifications />
+            {children}
+          </ModalsProvider>
+        </MantineProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
