@@ -267,7 +267,7 @@ export default function Maintenance() {
                     </div>
                   </Table.Td>
                   <Table.Td>
-                    {log.cost ? `$${log.cost}` : "N/A"}
+                    {log.cost ? `₵${log.cost}` : "N/A"}
                   </Table.Td>
                   <Table.Td>
                     {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
@@ -316,7 +316,7 @@ export default function Maintenance() {
                 name="roomId"
                 data={rooms.map(room => ({
                   value: room.id,
-                  label: `Room ${room.number} - ${room.type.replace("_", " ")}`
+                  label: `Room ${room.number} (Block ${room.block}) - ${room.type.replace("_", " ")}`
                 }))}
                 required
                 searchable
@@ -377,7 +377,7 @@ export default function Maintenance() {
                 placeholder="100"
                 name="cost"
                 min={0}
-                prefix="$"
+                prefix="₵"
                 decimalScale={2}
               />
 

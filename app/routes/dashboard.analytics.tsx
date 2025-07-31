@@ -238,7 +238,7 @@ export default function Analytics() {
               </div>
             </Group>
             <Text size="xl" fw={700} mb="xs">
-              ${stats.currentMonth.revenue.toLocaleString()}
+              ₵{stats.currentMonth.revenue.toLocaleString()}
             </Text>
             <Text size="sm" c="dimmed">
               Revenue this month
@@ -321,7 +321,7 @@ export default function Analytics() {
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <Badge size="sm" color="green">
-                      ${booking.totalAmount}
+                      ₵{booking.totalAmount}
                     </Badge>
                     <Text size="xs" c="dimmed">
                       {booking.status}
@@ -349,7 +349,7 @@ export default function Analytics() {
                     </Text>
                   </div>
                   <Text fw={700} c="green">
-                    ${(payment._sum.amount || 0).toLocaleString()}
+                    ₵{(payment._sum.amount || 0).toLocaleString()}
                   </Text>
                 </Group>
               ))}

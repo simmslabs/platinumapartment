@@ -25,6 +25,8 @@ import {
   IconChartBar,
   IconBuildingStore,
   IconClockHour2,
+  IconShield,
+  IconReport,
 } from "@tabler/icons-react";
 import type { User } from "@prisma/client";
 
@@ -42,11 +44,14 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
     { icon: IconBed, label: "Rooms", link: "/dashboard/rooms" },
     { icon: IconCalendar, label: "Bookings", link: "/dashboard/bookings" },
     { icon: IconUsers, label: "Guests", link: "/dashboard/guests" },
+    { icon: IconUsers, label: "Users", link: "/dashboard/users" },
     { icon: IconCreditCard, label: "Payments", link: "/dashboard/payments" },
+    { icon: IconShield, label: "Security Deposits", link: "/dashboard/security-deposits" },
     { icon: IconBuildingStore, label: "Services", link: "/dashboard/services" },
     { icon: IconTool, label: "Maintenance", link: "/dashboard/maintenance" },
     { icon: IconStar, label: "Reviews", link: "/dashboard/reviews" },
     { icon: IconChartBar, label: "Analytics", link: "/dashboard/analytics" },
+    { icon: IconReport, label: "Reports", link: "/dashboard/reports" },
     { icon: IconSettings, label: "Settings", link: "/dashboard/settings" },
   ];
 
@@ -55,10 +60,10 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
     if (!user) return false;
     if (user.role === "ADMIN") return true;
     if (user.role === "MANAGER") {
-      return !["Settings"].includes(item.label);
+      return !["Settings", "Users"].includes(item.label);
     }
     if (user.role === "STAFF") {
-      return ["Dashboard", "Rooms", "Bookings", "Guests", "Services", "Maintenance"].includes(item.label);
+      return ["Dashboard", "Monitoring", "Rooms", "Bookings", "Guests", "Payments", "Security Deposits", "Services", "Maintenance"].includes(item.label);
     }
     return ["Dashboard", "Bookings"].includes(item.label);
   });

@@ -6,26 +6,31 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // User Management
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  password    String
-  firstName   String
-  lastName    String
-  role        UserRole @default(GUEST)
-  phone       String?
-  address     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole @default(GUEST)
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  bookings    Booking[]
-  reviews     Review[]
+  bookings Booking[]
+  reviews  Review[]
+
+  // Indexes for better PostgreSQL performance
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
 }
 
 enum UserRole {
@@ -35,24 +40,56 @@ enum UserRole {
   GUEST
 }
 
+// Block Management
+model Block {
+  id          String   @id @default(cuid())
+  name        String   @unique // Block identifier (e.g., "A", "B", "East Wing", etc.)
+  description String? // Optional description of the block
+  floors      Int? // Number of floors in this block
+  location    String? // Physical location or address details
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  rooms Room[]
+
+  // Indexes for better PostgreSQL performance
+  @@index([name])
+  @@index([createdAt])
+}
+
 // Room Management
 model Room {
-  id          String     @id @default(cuid())
-  number      String     @unique
-  type        RoomType
-  status      RoomStatus @default(AVAILABLE)
-  floor       Int
-  capacity    Int
+  id            String     @id @default(cuid())
+  number        String     
+  type          RoomType
+  status        RoomStatus @default(AVAILABLE)
+  blockId       String?    // Make optional for migration, then required later
+  block         String     @default("A") // Keep for backward compatibility during migration
+  floor         Int
+  capacity      Int
   pricePerNight Float
-  description String?
-  amenities   String? // JSON string of amenities
-  images      String? // JSON string of image URLs
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  
+  description   String?
+  amenities     String? // JSON string of amenities
+  images        String? // JSON string of image URLs
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
   // Relations
-  bookings    Booking[]
-  maintenance MaintenanceLog[]
+  blockRelation Block?           @relation(fields: [blockId], references: [id])
+  bookings      Booking[]
+  maintenance   MaintenanceLog[]
+
+  // Composite unique constraint: room number unique within each block
+  @@unique([number, blockId])
+  
+  // Indexes for better PostgreSQL performance
+  @@index([status])
+  @@index([type])
+  @@index([blockId])
+  @@index([floor])
+  @@index([pricePerNight])
+  @@index([createdAt])
 }
 
 enum RoomType {
@@ -72,23 +109,33 @@ enum RoomStatus {
 
 // Booking Management
 model Booking {
-  id          String        @id @default(cuid())
-  userId      String
-  roomId      String
-  checkIn     DateTime
-  checkOut    DateTime
-  guests      Int
-  totalAmount Float
-  status      BookingStatus @default(PENDING)
+  id              String        @id @default(cuid())
+  userId          String
+  roomId          String
+  checkIn         DateTime
+  checkOut        DateTime
+  guests          Int
+  totalAmount     Float
+  status          BookingStatus @default(PENDING)
   specialRequests String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
   // Relations
-  user        User    @relation(fields: [userId], references: [id])
-  room        Room    @relation(fields: [roomId], references: [id])
-  payment     Payment?
-  services    BookingService[]
+  user            User             @relation(fields: [userId], references: [id])
+  room            Room             @relation(fields: [roomId], references: [id])
+  payment         Payment?
+  securityDeposit SecurityDeposit?
+  services        BookingService[]
+
+  // Indexes for better PostgreSQL performance
+  @@index([userId])
+  @@index([roomId])
+  @@index([status])
+  @@index([checkIn])
+  @@index([checkOut])
+  @@index([createdAt])
+  @@index([checkIn, checkOut]) // Composite index for date range queries
 }
 
 enum BookingStatus {
@@ -101,18 +148,48 @@ enum BookingStatus {
 
 // Payment Management
 model Payment {
-  id          String        @id @default(cuid())
-  bookingId   String        @unique
-  amount      Float
-  method      PaymentMethod
-  status      PaymentStatus @default(PENDING)
+  id            String        @id @default(cuid())
+  bookingId     String        @unique
+  amount        Float
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
   transactionId String?
-  paidAt      DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
   // Relations
-  booking     Booking @relation(fields: [bookingId], references: [id])
+  booking Booking @relation(fields: [bookingId], references: [id])
+}
+
+// Security Deposit Management
+model SecurityDeposit {
+  id              String                @id @default(cuid())
+  bookingId       String                @unique
+  amount          Float
+  method          PaymentMethod
+  status          SecurityDepositStatus @default(PENDING)
+  transactionId   String?
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  refundAmount    Float?
+  deductionAmount Float?                @default(0)
+  deductionReason String?
+  damageReport    String?
+  processedBy     String? // User ID who processed the refund
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id])
+}
+
+enum SecurityDepositStatus {
+  PENDING
+  PAID
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FORFEITED
 }
 
 enum PaymentMethod {
@@ -132,15 +209,15 @@ enum PaymentStatus {
 
 // Additional Services
 model Service {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
   description String?
   price       Float
   category    ServiceCategory
-  available   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  available   Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
   // Relations
   bookingServices BookingService[]
 }
@@ -156,17 +233,17 @@ enum ServiceCategory {
 }
 
 model BookingService {
-  id        String   @id @default(cuid())
-  bookingId String
-  serviceId String
-  quantity  Int      @default(1)
+  id         String   @id @default(cuid())
+  bookingId  String
+  serviceId  String
+  quantity   Int      @default(1)
   totalPrice Float
-  createdAt DateTime @default(now())
-  
+  createdAt  DateTime @default(now())
+
   // Relations
-  booking   Booking @relation(fields: [bookingId], references: [id])
-  service   Service @relation(fields: [serviceId], references: [id])
-  
+  booking Booking @relation(fields: [bookingId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
   @@unique([bookingId, serviceId])
 }
 
@@ -186,9 +263,9 @@ model MaintenanceLog {
   notes       String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
-  
+
   // Relations
-  room        Room @relation(fields: [roomId], references: [id])
+  room Room @relation(fields: [roomId], references: [id])
 }
 
 enum MaintenanceType {
@@ -215,17 +292,17 @@ enum Priority {
 
 // Guest Reviews
 model Review {
-  id          String   @id @default(cuid())
-  userId      String
-  rating      Int      // 1-5
-  title       String?
-  comment     String?
-  category    ReviewCategory @default(OVERALL)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id        String         @id @default(cuid())
+  userId    String
+  rating    Int // 1-5
+  title     String?
+  comment   String?
+  category  ReviewCategory @default(OVERALL)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
   // Relations
-  user        User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 enum ReviewCategory {
@@ -239,12 +316,32 @@ enum ReviewCategory {
 
 // Apartment Analytics
 model Analytics {
-  id          String   @id @default(cuid())
-  date        DateTime @unique
-  totalBookings Int    @default(0)
-  totalRevenue Float   @default(0)
-  occupancyRate Float  @default(0)
-  avgRating   Float?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  date          DateTime @unique
+  totalBookings Int      @default(0)
+  totalRevenue  Float    @default(0)
+  occupancyRate Float    @default(0)
+  avgRating     Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// System Settings
+model Setting {
+  id          String          @id @default(cuid())
+  key         String          @unique
+  value       String?
+  isSecret    Boolean         @default(false)
+  description String?
+  category    SettingCategory @default(GENERAL)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum SettingCategory {
+  GENERAL
+  EMAIL
+  SMS
+  SECURITY
+  API
 }

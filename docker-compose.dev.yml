@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Development
+  postgres:
+    image: postgres:15-alpine
+    container_name: apartment-postgres
+    environment:
+      POSTGRES_DB: apartment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - apartment-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d apartment_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin (Optional - Database Management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: apartment-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@apartment.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - apartment-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - tools # Use: docker-compose --profile tools up to include pgAdmin
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  apartment-network:
+    driver: bridge
+
+# Usage:
+# 1. Start PostgreSQL only: docker-compose up postgres -d
+# 2. Start PostgreSQL + pgAdmin: docker-compose --profile tools up -d
+# 3. Stop all services: docker-compose down
+# 4. Remove all data: docker-compose down -v (WARNING: This deletes all data!)
+
+# Access:
+# - PostgreSQL: localhost:5432
+# - pgAdmin: http://localhost:8080 (admin@apartment.com / admin)

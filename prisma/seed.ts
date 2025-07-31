@@ -72,29 +72,54 @@ async function seed() {
 
   console.log("👥 Created users");
 
+  // Create blocks
+  const blockA = await prisma.block.upsert({
+    where: { name: "A" },
+    update: {},
+    create: {
+      name: "A",
+      description: "Block A - Main Building",
+      floors: 5,
+      location: "Front section of the complex"
+    }
+  });
+
+  const blockB = await prisma.block.upsert({
+    where: { name: "B" },
+    update: {},
+    create: {
+      name: "B", 
+      description: "Block B - East Wing",
+      floors: 3,
+      location: "Eastern section of the complex"
+    }
+  });
+
+  console.log("🏢 Created blocks");
+
   // Create rooms
   const rooms = [
     // Single rooms
-    { number: "101", type: "SINGLE" as const, floor: 1, capacity: 1, pricePerNight: 80, description: "Cozy single room with city view" },
-    { number: "102", type: "SINGLE" as const, floor: 1, capacity: 1, pricePerNight: 80, description: "Comfortable single room" },
-    { number: "103", type: "SINGLE" as const, floor: 1, capacity: 1, pricePerNight: 80, description: "Single room with garden view" },
+    { number: "101", type: "SINGLE" as const, blockId: blockA.id, floor: 1, capacity: 1, pricePerNight: 80, description: "Cozy single room with city view" },
+    { number: "102", type: "SINGLE" as const, blockId: blockA.id, floor: 1, capacity: 1, pricePerNight: 80, description: "Comfortable single room" },
+    { number: "103", type: "SINGLE" as const, blockId: blockA.id, floor: 1, capacity: 1, pricePerNight: 80, description: "Single room with garden view" },
     
     // Double rooms
-    { number: "201", type: "DOUBLE" as const, floor: 2, capacity: 2, pricePerNight: 120, description: "Spacious double room with balcony" },
-    { number: "202", type: "DOUBLE" as const, floor: 2, capacity: 2, pricePerNight: 120, description: "Double room with mountain view" },
-    { number: "203", type: "DOUBLE" as const, floor: 2, capacity: 2, pricePerNight: 120, description: "Elegant double room" },
-    { number: "204", type: "DOUBLE" as const, floor: 2, capacity: 2, pricePerNight: 120, description: "Double room with city view" },
+    { number: "201", type: "DOUBLE" as const, blockId: blockA.id, floor: 2, capacity: 2, pricePerNight: 120, description: "Spacious double room with balcony" },
+    { number: "202", type: "DOUBLE" as const, blockId: blockA.id, floor: 2, capacity: 2, pricePerNight: 120, description: "Double room with mountain view" },
+    { number: "203", type: "DOUBLE" as const, blockId: blockB.id, floor: 2, capacity: 2, pricePerNight: 120, description: "Elegant double room" },
+    { number: "204", type: "DOUBLE" as const, blockId: blockB.id, floor: 2, capacity: 2, pricePerNight: 120, description: "Double room with city view" },
     
     // Suites
-    { number: "301", type: "SUITE" as const, floor: 3, capacity: 4, pricePerNight: 250, description: "Luxury suite with separate living area" },
-    { number: "302", type: "SUITE" as const, floor: 3, capacity: 4, pricePerNight: 250, description: "Executive suite with office space" },
+    { number: "301", type: "SUITE" as const, blockId: blockA.id, floor: 3, capacity: 4, pricePerNight: 250, description: "Luxury suite with separate living area" },
+    { number: "302", type: "SUITE" as const, blockId: blockB.id, floor: 3, capacity: 4, pricePerNight: 250, description: "Executive suite with office space" },
     
     // Deluxe rooms
-    { number: "401", type: "DELUXE" as const, floor: 4, capacity: 3, pricePerNight: 180, description: "Deluxe room with premium amenities" },
-    { number: "402", type: "DELUXE" as const, floor: 4, capacity: 3, pricePerNight: 180, description: "Deluxe room with spa access" },
+    { number: "401", type: "DELUXE" as const, blockId: blockA.id, floor: 4, capacity: 3, pricePerNight: 180, description: "Deluxe room with premium amenities" },
+    { number: "402", type: "DELUXE" as const, blockId: blockB.id, floor: 4, capacity: 3, pricePerNight: 180, description: "Deluxe room with spa access" },
     
     // Presidential suite
-    { number: "501", type: "PRESIDENTIAL" as const, floor: 5, capacity: 6, pricePerNight: 500, description: "Presidential suite with panoramic views and private butler service" },
+    { number: "501", type: "PRESIDENTIAL" as const, blockId: blockA.id, floor: 5, capacity: 6, pricePerNight: 500, description: "Presidential suite with panoramic views and private butler service" },
   ];
 
   for (const roomData of rooms) {

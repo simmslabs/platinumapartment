@@ -138,6 +138,8 @@ export async function action({ request }: ActionFunctionArgs) {
           checkOut: checkOut.toLocaleDateString(),
           totalAmount,
           bookingId: newBooking.id,
+          securityDepositRequired: true, // Add security deposit notification
+          securityDepositAmount: 200, // Standard security deposit amount
         });
         console.log(`Booking confirmation email sent to ${user.email}`);
       } catch (emailError) {
@@ -145,7 +147,10 @@ export async function action({ request }: ActionFunctionArgs) {
         // Don't fail the booking if email fails
       }
 
-      return json({ success: "Booking created successfully and confirmation email sent!" });
+      return json({ 
+        success: "Booking created successfully! Don't forget to collect the ₵200 security deposit.",
+        bookingId: newBooking.id 
+      });
     }
 
     if (intent === "update-status") {
@@ -294,6 +299,28 @@ export default function Bookings() {
           </Alert>
         )}
 
+        {/* Security Deposit Reminder */}
+        {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
+          <Alert
+            icon={<IconInfoCircle size={16} />}
+            title="Security Deposit Reminder"
+            color="blue"
+            variant="light"
+          >
+            <Text size="sm" mb="xs">
+              Remember to collect security deposits for confirmed bookings. Standard amount is ₵200.
+            </Text>
+            <Button
+              component="a"
+              href="/dashboard/security-deposits"
+              size="xs"
+              variant="light"
+            >
+              Manage Security Deposits
+            </Button>
+          </Alert>
+        )}
+
         {/* Search and Filter Controls */}
         <Card>
           <Group>
@@ -384,7 +411,7 @@ export default function Bookings() {
                   <Table.Td>{format(new Date(booking.checkIn), "MMM dd, yyyy")}</Table.Td>
                   <Table.Td>{format(new Date(booking.checkOut), "MMM dd, yyyy")}</Table.Td>
                   <Table.Td>{booking.guests}</Table.Td>
-                  <Table.Td>${booking.totalAmount}</Table.Td>
+                  <Table.Td>₵{booking.totalAmount}</Table.Td>
                   <Table.Td>
                     <Badge color={getStatusColor(booking.status)} size="sm">
                       {booking.status.replace("_", " ")}
@@ -472,7 +499,7 @@ export default function Bookings() {
                 name="roomId"
                 data={availableRooms.map(room => ({
                   value: room.id,
-                  label: `Room ${room.number} - ${room.type} ($${room.pricePerNight}/night)`
+                  label: `Room ${room.number} (Block ${room.block}) - ${room.type} (₵${room.pricePerNight}/night)`
                 }))}
                 required
                 searchable

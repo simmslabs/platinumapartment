@@ -3,5 +3,31 @@ node_modules
 /.cache
 /build
 .env
+.env.local
+.env.production
 
 /generated/prisma
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Development files
+/docker-data/
+/postgres-data/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

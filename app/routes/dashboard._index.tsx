@@ -137,7 +137,7 @@ export default function Dashboard() {
     },
     {
       title: "Total Revenue",
-      value: `$${stats.totalRevenue.toLocaleString()}`,
+      value: `₵${stats.totalRevenue.toLocaleString()}`,
       description: "All time",
       icon: IconCurrencyDollar,
       color: "yellow",
@@ -235,6 +235,42 @@ export default function Dashboard() {
               {stats.occupiedRooms} of {stats.totalRooms} rooms occupied ({stats.occupancyRate.toFixed(1)}%)
             </Text>
           </Card>
+        )}
+
+        {/* Quick Access Cards */}
+        {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+          <Grid>
+            <Grid.Col span={{ base: 12, sm: 6 }}>
+              <Card shadow="sm" p="lg" component={Link} to="/dashboard/reports" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Group>
+                  <ThemeIcon size="xl" variant="light" color="green">
+                    <IconCurrencyDollar size={24} />
+                  </ThemeIcon>
+                  <div>
+                    <Text fw={500}>Financial Reports</Text>
+                    <Text size="sm" c="dimmed">
+                      View revenue analytics and guest balances
+                    </Text>
+                  </div>
+                </Group>
+              </Card>
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, sm: 6 }}>
+              <Card shadow="sm" p="lg" component={Link} to="/dashboard/security-deposits" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Group>
+                  <ThemeIcon size="xl" variant="light" color="blue">
+                    <IconAlertTriangle size={24} />
+                  </ThemeIcon>
+                  <div>
+                    <Text fw={500}>Security Deposits</Text>
+                    <Text size="sm" c="dimmed">
+                      Manage deposits and process refunds
+                    </Text>
+                  </div>
+                </Group>
+              </Card>
+            </Grid.Col>
+          </Grid>
         )}
       </Stack>
     </DashboardLayout>

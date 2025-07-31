@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useSearchParams } from "@remix-run/react";
 import {
   Title,
   Table,
@@ -14,9 +14,13 @@ import {
   Alert,
   Text,
   Card,
+  TextInput,
+  ActionIcon,
+  Grid,
+  Flex,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconInfoCircle } from "@tabler/icons-react";
+import { IconPlus, IconInfoCircle, IconTrash, IconFilter, IconX, IconSearch } from "@tabler/icons-react";
 import { format } from "date-fns";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
@@ -41,7 +45,43 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
 
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status");
+  const method = url.searchParams.get("method");
+  const search = url.searchParams.get("search");
+
+  // Build where clause for filtering
+  const where: any = {};
+  
+  if (status && status !== "all") {
+    where.status = status;
+  }
+  
+  if (method && method !== "all") {
+    where.method = method;
+  }
+
+  if (search) {
+    where.OR = [
+      {
+        booking: {
+          user: {
+            OR: [
+              { firstName: { contains: search, mode: "insensitive" } },
+              { lastName: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+            ],
+          },
+        },
+      },
+      {
+        transactionId: { contains: search, mode: "insensitive" },
+      },
+    ];
+  }
+
   const payments = await db.payment.findMany({
+    where,
     include: {
       booking: {
         include: {
@@ -114,6 +154,20 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ success: "Payment recorded successfully" });
     }
 
+    if (intent === "delete") {
+      const paymentId = formData.get("paymentId") as string;
+
+      if (!paymentId) {
+        return json({ error: "Payment ID is required" }, { status: 400 });
+      }
+
+      await db.payment.delete({
+        where: { id: paymentId },
+      });
+
+      return json({ success: "Payment deleted successfully" });
+    }
+
     if (intent === "update-status") {
       const paymentId = formData.get("paymentId") as string;
       const status = formData.get("status") as any;
@@ -140,6 +194,7 @@ export default function Payments() {
   const { user, payments, unpaidBookings } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [opened, { open, close }] = useDisclosure(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const getStatusColor = (status: Payment["status"]) => {
     switch (status) {
@@ -173,6 +228,32 @@ export default function Payments() {
     }
   };
 
+  const handleFilter = (key: string, value: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (value && value !== "all") {
+      newParams.set(key, value);
+    } else {
+      newParams.delete(key);
+    }
+    setSearchParams(newParams);
+  };
+
+  const clearFilters = () => {
+    setSearchParams({});
+  };
+
+  const handleDelete = (paymentId: string) => {
+    if (confirm("Are you sure you want to delete this payment? This action cannot be undone.")) {
+      const form = new FormData();
+      form.append("intent", "delete");
+      form.append("paymentId", paymentId);
+      fetch("/dashboard/payments", {
+        method: "POST",
+        body: form,
+      }).then(() => window.location.reload());
+    }
+  };
+
   return (
     <DashboardLayout user={user}>
       <Stack>
@@ -184,6 +265,28 @@ export default function Payments() {
             </Button>
           )}
         </Group>
+
+        {/* Security Deposit Integration */}
+        {unpaidBookings.length > 0 && (
+          <Alert
+            icon={<IconInfoCircle size={16} />}
+            title="Security Deposits Reminder"
+            color="blue"
+            variant="light"
+          >
+            <Text size="sm" mb="xs">
+              Don't forget to collect security deposits for new bookings. 
+            </Text>
+            <Button
+              component="a"
+              href="/dashboard/security-deposits"
+              size="xs"
+              variant="light"
+            >
+              Manage Security Deposits
+            </Button>
+          </Alert>
+        )}
 
         {actionData?.error && (
           <Alert
@@ -204,6 +307,71 @@ export default function Payments() {
             {actionData.success}
           </Alert>
         )}
+
+        {/* Filters */}
+        <Card>
+          <Group mb="md">
+            <IconFilter size={16} />
+            <Text fw={500}>Filters</Text>
+            {(searchParams.get("status") || searchParams.get("method") || searchParams.get("search")) && (
+              <Button
+                variant="light"
+                size="xs"
+                leftSection={<IconX size={12} />}
+                onClick={clearFilters}
+              >
+                Clear Filters
+              </Button>
+            )}
+          </Group>
+          
+          <Grid>
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <TextInput
+                placeholder="Search guest, email, or transaction ID"
+                leftSection={<IconSearch size={16} />}
+                value={searchParams.get("search") || ""}
+                onChange={(event) => handleFilter("search", event.currentTarget.value)}
+              />
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Select
+                placeholder="Filter by status"
+                value={searchParams.get("status") || "all"}
+                onChange={(value) => handleFilter("status", value || "")}
+                data={[
+                  { value: "all", label: "All Statuses" },
+                  { value: "PENDING", label: "Pending" },
+                  { value: "COMPLETED", label: "Completed" },
+                  { value: "FAILED", label: "Failed" },
+                  { value: "REFUNDED", label: "Refunded" },
+                ]}
+              />
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Select
+                placeholder="Filter by method"
+                value={searchParams.get("method") || "all"}
+                onChange={(value) => handleFilter("method", value || "")}
+                data={[
+                  { value: "all", label: "All Methods" },
+                  { value: "CASH", label: "Cash" },
+                  { value: "CREDIT_CARD", label: "Credit Card" },
+                  { value: "DEBIT_CARD", label: "Debit Card" },
+                  { value: "ONLINE", label: "Online Payment" },
+                  { value: "BANK_TRANSFER", label: "Bank Transfer" },
+                ]}
+              />
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Flex justify="flex-end" align="center" h="100%">
+                <Text size="sm" c="dimmed">
+                  {payments.length} payment{payments.length !== 1 ? 's' : ''} found
+                </Text>
+              </Flex>
+            </Grid.Col>
+          </Grid>
+        </Card>
 
         <Card>
           <Table striped highlightOnHover>
@@ -236,7 +404,7 @@ export default function Payments() {
                     <Text fw={500}>Room {payment.booking.room.number}</Text>
                   </Table.Td>
                   <Table.Td>
-                    <Text fw={500}>${payment.amount}</Text>
+                    <Text fw={500}>₵{payment.amount}</Text>
                   </Table.Td>
                   <Table.Td>
                     <Badge color={getMethodColor(payment.method)} size="sm">
@@ -260,40 +428,65 @@ export default function Payments() {
                     }
                   </Table.Td>
                   <Table.Td>
-                    {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
-                      <Form method="post" style={{ display: "inline" }}>
-                        <input type="hidden" name="intent" value="update-status" />
-                        <input type="hidden" name="paymentId" value={payment.id} />
-                        <Select
-                          name="status"
-                          size="xs"
-                          data={[
-                            { value: "PENDING", label: "Pending" },
-                            { value: "COMPLETED", label: "Completed" },
-                            { value: "FAILED", label: "Failed" },
-                            { value: "REFUNDED", label: "Refunded" },
-                          ]}
-                          defaultValue={payment.status}
-                          onChange={(value) => {
-                            if (value) {
-                              const form = new FormData();
-                              form.append("intent", "update-status");
-                              form.append("paymentId", payment.id);
-                              form.append("status", value);
-                              fetch("/dashboard/payments", {
-                                method: "POST",
-                                body: form,
-                              }).then(() => window.location.reload());
-                            }
-                          }}
-                        />
-                      </Form>
-                    )}
+                    <Group gap="xs">
+                      {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+                        <Form method="post" style={{ display: "inline" }}>
+                          <input type="hidden" name="intent" value="update-status" />
+                          <input type="hidden" name="paymentId" value={payment.id} />
+                          <Select
+                            name="status"
+                            size="xs"
+                            data={[
+                              { value: "PENDING", label: "Pending" },
+                              { value: "COMPLETED", label: "Completed" },
+                              { value: "FAILED", label: "Failed" },
+                              { value: "REFUNDED", label: "Refunded" },
+                            ]}
+                            defaultValue={payment.status}
+                            onChange={(value) => {
+                              if (value) {
+                                const form = new FormData();
+                                form.append("intent", "update-status");
+                                form.append("paymentId", payment.id);
+                                form.append("status", value);
+                                fetch("/dashboard/payments", {
+                                  method: "POST",
+                                  body: form,
+                                }).then(() => window.location.reload());
+                              }
+                            }}
+                          />
+                        </Form>
+                      )}
+                      {user?.role === "ADMIN" && (
+                        <ActionIcon
+                          color="red"
+                          variant="light"
+                          size="sm"
+                          onClick={() => handleDelete(payment.id)}
+                          title="Delete payment"
+                        >
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      )}
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
           </Table>
+
+          {payments.length === 0 && (
+            <Stack align="center" py="xl">
+              <IconInfoCircle size={48} color="gray" />
+              <Text c="dimmed" ta="center">
+                {(searchParams.get("status") || searchParams.get("method") || searchParams.get("search"))
+                  ? "No payments found matching your filters"
+                  : "No payments recorded yet"
+                }
+              </Text>
+            </Stack>
+          )}
         </Card>
 
         <Modal opened={opened} onClose={close} title="Record Payment" size="lg">
@@ -306,7 +499,7 @@ export default function Payments() {
                 name="bookingId"
                 data={unpaidBookings.map(booking => ({
                   value: booking.id,
-                  label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number} ($${booking.totalAmount})`
+                  label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number} (₵${booking.totalAmount})`
                 }))}
                 required
                 searchable
