@@ -81,11 +81,11 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
         <Group h="100%" px="md" justify="space-between">
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Text size="xl" fw={700} c="blue">
+            <Text size="xl" fw={{ span: 100, md: 700 }} truncate c="blue">
               🏨 Platinum Apartment Management
             </Text>
           </Group>
-          
+
           {user && (
             <Menu shadow="md" width={200}>
               <Menu.Target>
@@ -100,9 +100,6 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
 
               <Menu.Dropdown>
                 <Menu.Label>Account</Menu.Label>
-                <Menu.Item component={Link} to="/dashboard/profile">
-                  Profile
-                </Menu.Item>
                 <Menu.Divider />
                 <Form method="post" action="/logout">
                   <Menu.Item
