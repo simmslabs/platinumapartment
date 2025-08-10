@@ -37,8 +37,27 @@ import {
   IconCheck,
   IconFilter,
   IconDownload,
+  IconFileExport,
+  IconFileSpreadsheet,
 } from "@tabler/icons-react";
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, subYears } from "date-fns";
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfYear, 
+  endOfYear, 
+  subMonths, 
+  subYears,
+  startOfWeek,
+  endOfWeek,
+  startOfQuarter,
+  endOfQuarter,
+  startOfDay,
+  endOfDay,
+  subDays,
+  subWeeks,
+  subQuarters,
+} from "date-fns";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -98,6 +117,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let endDate: Date;
   
   switch (period) {
+    case "today":
+      startDate = startOfDay(new Date());
+      endDate = endOfDay(new Date());
+      break;
+    case "yesterday":
+      const yesterday = subDays(new Date(), 1);
+      startDate = startOfDay(yesterday);
+      endDate = endOfDay(yesterday);
+      break;
+    case "thisWeek":
+      startDate = startOfWeek(new Date());
+      endDate = endOfWeek(new Date());
+      break;
+    case "lastWeek":
+      const lastWeek = subWeeks(new Date(), 1);
+      startDate = startOfWeek(lastWeek);
+      endDate = endOfWeek(lastWeek);
+      break;
     case "thisMonth":
       startDate = startOfMonth(new Date());
       endDate = endOfMonth(new Date());
@@ -106,6 +143,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       const lastMonth = subMonths(new Date(), 1);
       startDate = startOfMonth(lastMonth);
       endDate = endOfMonth(lastMonth);
+      break;
+    case "thisQuarter":
+      startDate = startOfQuarter(new Date());
+      endDate = endOfQuarter(new Date());
+      break;
+    case "lastQuarter":
+      const lastQuarter = subQuarters(new Date(), 1);
+      startDate = startOfQuarter(lastQuarter);
+      endDate = endOfQuarter(lastQuarter);
       break;
     case "thisYear":
       startDate = startOfYear(new Date());
@@ -280,40 +326,104 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   guestBalances.push(...Array.from(userMap.values()));
 
-  // Calculate monthly trends (last 6 months)
-  const monthlyTrends: MonthlyTrend[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const monthDate = subMonths(new Date(), i);
-    const monthStart = startOfMonth(monthDate);
-    const monthEnd = endOfMonth(monthDate);
+  // Calculate historical trends based on period type
+  const trends: MonthlyTrend[] = [];
+  let trendsCount = 6; // Default for monthly
+  let trendLabel = "month";
+  
+  switch (period) {
+    case "today":
+    case "yesterday":
+      trendsCount = 7;
+      trendLabel = "day";
+      break;
+    case "thisWeek":
+    case "lastWeek":
+      trendsCount = 8;
+      trendLabel = "week";
+      break;
+    case "thisMonth":
+    case "lastMonth":
+      trendsCount = 6;
+      trendLabel = "month";
+      break;
+    case "thisQuarter":
+    case "lastQuarter":
+      trendsCount = 4;
+      trendLabel = "quarter";
+      break;
+    case "thisYear":
+    case "lastYear":
+      trendsCount = 5;
+      trendLabel = "year";
+      break;
+  }
 
-    const monthPayments = await db.payment.findMany({
+  for (let i = trendsCount - 1; i >= 0; i--) {
+    let periodDate: Date;
+    let periodStart: Date;
+    let periodEnd: Date;
+    let periodFormat: string;
+
+    switch (trendLabel) {
+      case "day":
+        periodDate = subDays(new Date(), i);
+        periodStart = startOfDay(periodDate);
+        periodEnd = endOfDay(periodDate);
+        periodFormat = "MMM dd";
+        break;
+      case "week":
+        periodDate = subWeeks(new Date(), i);
+        periodStart = startOfWeek(periodDate);
+        periodEnd = endOfWeek(periodDate);
+        periodFormat = "'Week of' MMM dd";
+        break;
+      case "quarter":
+        periodDate = subQuarters(new Date(), i);
+        periodStart = startOfQuarter(periodDate);
+        periodEnd = endOfQuarter(periodDate);
+        periodFormat = "QQQ yyyy";
+        break;
+      case "year":
+        periodDate = subYears(new Date(), i);
+        periodStart = startOfYear(periodDate);
+        periodEnd = endOfYear(periodDate);
+        periodFormat = "yyyy";
+        break;
+      default: // month
+        periodDate = subMonths(new Date(), i);
+        periodStart = startOfMonth(periodDate);
+        periodEnd = endOfMonth(periodDate);
+        periodFormat = "MMM yyyy";
+    }
+
+    const periodPayments = await db.payment.findMany({
       where: {
-        paidAt: { gte: monthStart, lte: monthEnd },
+        paidAt: { gte: periodStart, lte: periodEnd },
         status: "COMPLETED",
       },
     });
 
-    const monthDeposits = await db.securityDeposit.findMany({
+    const periodDeposits = await db.securityDeposit.findMany({
       where: {
-        paidAt: { gte: monthStart, lte: monthEnd },
+        paidAt: { gte: periodStart, lte: periodEnd },
         status: "PAID",
       },
     });
 
-    const monthBookings = await db.booking.findMany({
+    const periodBookings = await db.booking.findMany({
       where: {
-        createdAt: { gte: monthStart, lte: monthEnd },
+        createdAt: { gte: periodStart, lte: periodEnd },
         status: { not: "CANCELLED" },
       },
     });
 
-    monthlyTrends.push({
-      month: format(monthDate, "MMM yyyy"),
-      revenue: monthPayments.reduce((sum, p) => sum + p.amount, 0),
-      payments: monthPayments.length,
-      securityDeposits: monthDeposits.reduce((sum, d) => sum + d.amount, 0),
-      bookings: monthBookings.length,
+    trends.push({
+      month: format(periodDate, periodFormat),
+      revenue: periodPayments.reduce((sum, p) => sum + p.amount, 0),
+      payments: periodPayments.length,
+      securityDeposits: periodDeposits.reduce((sum, d) => sum + d.amount, 0),
+      bookings: periodBookings.length,
     });
   }
 
@@ -321,15 +431,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user,
     revenueData,
     guestBalances: guestBalances.sort((a, b) => b.totalPaid - a.totalPaid),
-    monthlyTrends,
+    trends,
     period,
     startDate: startDate.toISOString(),
     endDate: endDate.toISOString(),
+    trendLabel,
   });
 }
 
 export default function Reports() {
-  const { user, revenueData, guestBalances, monthlyTrends, period } = useLoaderData<typeof loader>();
+  const { user, revenueData, guestBalances, trends, period, trendLabel } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const handlePeriodChange = (value: string | null) => {
@@ -338,6 +449,11 @@ export default function Reports() {
       newParams.set("period", value);
       setSearchParams(newParams);
     }
+  };
+
+  const handleExport = (format: 'csv' | 'excel') => {
+    const exportUrl = `/api/reports/export?period=${period}&format=${format}`;
+    window.open(exportUrl, '_blank');
   };
 
   const formatCurrency = (amount: number) => {
@@ -349,8 +465,14 @@ export default function Reports() {
 
   const getPeriodLabel = (period: string) => {
     switch (period) {
+      case "today": return "Today";
+      case "yesterday": return "Yesterday";
+      case "thisWeek": return "This Week";
+      case "lastWeek": return "Last Week";
       case "thisMonth": return "This Month";
       case "lastMonth": return "Last Month";
+      case "thisQuarter": return "This Quarter";
+      case "lastQuarter": return "Last Quarter";
       case "thisYear": return "This Year";
       case "lastYear": return "Last Year";
       default: return "This Month";
@@ -372,19 +494,51 @@ export default function Reports() {
               value={period}
               onChange={handlePeriodChange}
               data={[
-                { value: "thisMonth", label: "This Month" },
-                { value: "lastMonth", label: "Last Month" },
-                { value: "thisYear", label: "This Year" },
-                { value: "lastYear", label: "Last Year" },
+                { group: "Daily", items: [
+                  { value: "today", label: "Today" },
+                  { value: "yesterday", label: "Yesterday" },
+                ]},
+                { group: "Weekly", items: [
+                  { value: "thisWeek", label: "This Week" },
+                  { value: "lastWeek", label: "Last Week" },
+                ]},
+                { group: "Monthly", items: [
+                  { value: "thisMonth", label: "This Month" },
+                  { value: "lastMonth", label: "Last Month" },
+                ]},
+                { group: "Quarterly", items: [
+                  { value: "thisQuarter", label: "This Quarter" },
+                  { value: "lastQuarter", label: "Last Quarter" },
+                ]},
+                { group: "Yearly", items: [
+                  { value: "thisYear", label: "This Year" },
+                  { value: "lastYear", label: "Last Year" },
+                ]},
               ]}
               leftSection={<IconCalendar size={16} />}
             />
+            <Button.Group>
+              <Button
+                leftSection={<IconFileSpreadsheet size={16} />}
+                variant="light"
+                onClick={() => handleExport('excel')}
+              >
+                Export Excel
+              </Button>
+              <Button
+                leftSection={<IconFileExport size={16} />}
+                variant="light"
+                onClick={() => handleExport('csv')}
+              >
+                Export CSV
+              </Button>
+            </Button.Group>
             <Button
               leftSection={<IconDownload size={16} />}
               variant="light"
               onClick={() => window.print()}
             >
-              Export Report
+              Print Report
             </Button>
           </Group>
         </Group>
@@ -397,8 +551,39 @@ export default function Reports() {
         >
           <Text size="sm">
             This report shows all financial transactions and analytics for the selected period.
+            Generated at: {format(new Date(), "MMM dd, yyyy 'at' HH:mm")}
           </Text>
         </Alert>
+
+        {/* Quick Stats Bar */}
+        <Grid>
+          <Grid.Col span={{ base: 6, sm: 3 }}>
+            <Paper p="md" withBorder ta="center">
+              <Text size="xl" fw={700} c="green">₵{revenueData.totalRevenue.toLocaleString()}</Text>
+              <Text size="sm" c="dimmed">Total Revenue</Text>
+            </Paper>
+          </Grid.Col>
+          <Grid.Col span={{ base: 6, sm: 3 }}>
+            <Paper p="md" withBorder ta="center">
+              <Text size="xl" fw={700} c="blue">{revenueData.totalBookings}</Text>
+              <Text size="sm" c="dimmed">Total Bookings</Text>
+            </Paper>
+          </Grid.Col>
+          <Grid.Col span={{ base: 6, sm: 3 }}>
+            <Paper p="md" withBorder ta="center">
+              <Text size="xl" fw={700} c="orange">₵{revenueData.averageBookingValue.toLocaleString()}</Text>
+              <Text size="sm" c="dimmed">Avg Booking Value</Text>
+            </Paper>
+          </Grid.Col>
+          <Grid.Col span={{ base: 6, sm: 3 }}>
+            <Paper p="md" withBorder ta="center">
+              <Text size="xl" fw={700} c="violet">
+                {((revenueData.totalPayments / (revenueData.totalPayments + guestBalances.reduce((sum, guest) => sum + guest.outstandingBalance, 0))) * 100).toFixed(1)}%
+              </Text>
+              <Text size="sm" c="dimmed">Collection Rate</Text>
+            </Paper>
+          </Grid.Col>
+        </Grid>
 
         <Tabs defaultValue="overview" variant="outline">
           <Tabs.List>
@@ -594,12 +779,11 @@ export default function Reports() {
                   <Text fw={500} mb="sm">Monthly Revenue Progress</Text>
                   <Progress 
                     value={(revenueData.totalRevenue / 10000) * 100} 
-                    label={`${formatCurrency(revenueData.totalRevenue)} / ${formatCurrency(10000)} target`}
                     size="xl"
                     color="green"
                   />
                   <Text size="sm" c="dimmed" mt="xs">
-                    Progress towards monthly revenue target
+                    {formatCurrency(revenueData.totalRevenue)} / {formatCurrency(10000)} target - Progress towards revenue target
                   </Text>
                 </Paper>
 
@@ -707,11 +891,11 @@ export default function Reports() {
 
           <Tabs.Panel value="trends" pt="xl">
             <Card>
-              <Title order={3} mb="md">6-Month Financial Trends</Title>
+              <Title order={3} mb="md">Historical {trendLabel === "month" ? "Monthly" : trendLabel === "quarter" ? "Quarterly" : trendLabel === "year" ? "Annual" : trendLabel === "week" ? "Weekly" : "Daily"} Trends</Title>
               <Table striped>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Month</Table.Th>
+                    <Table.Th>Period</Table.Th>
                     <Table.Th>Revenue</Table.Th>
                     <Table.Th>Payments</Table.Th>
                     <Table.Th>Security Deposits</Table.Th>
@@ -720,8 +904,8 @@ export default function Reports() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {monthlyTrends.map((trend, index) => {
-                    const prevRevenue = index > 0 ? monthlyTrends[index - 1].revenue : trend.revenue;
+                  {trends.map((trend: any, index: number) => {
+                    const prevRevenue = index > 0 ? trends[index - 1].revenue : trend.revenue;
                     const isGrowth = trend.revenue >= prevRevenue;
                     return (
                       <Table.Tr key={trend.month}>

@@ -24,8 +24,12 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  bookings Booking[]
-  reviews  Review[]
+  bookings        Booking[]
+  reviews         Review[]
+  notifications   Notification[]
+  paymentAccounts PaymentAccount[]  // User's saved payment methods
+  receipts        Receipt[]         // User's receipts
+  transactions    Transaction[]     // User's transaction history
 
   // Indexes for better PostgreSQL performance
   @@index([email])
@@ -60,7 +64,7 @@ model Block {
 
 // Room Management
 model Room {
-  id            String     @id @default(cuid())
+  id            String      @id @default(cuid())
   number        String     
   type          RoomType
   status        RoomStatus @default(AVAILABLE)
@@ -69,6 +73,8 @@ model Room {
   floor         Int
   capacity      Int
   pricePerNight Float
+  pricingPeriod PricingPeriod @default(NIGHT) // New field for pricing period
+  basePrice     Float?     // Optional base price for calculations
   description   String?
   amenities     String? // JSON string of amenities
   images        String? // JSON string of image URLs
@@ -89,6 +95,7 @@ model Room {
   @@index([blockId])
   @@index([floor])
   @@index([pricePerNight])
+  @@index([pricingPeriod])
   @@index([createdAt])
 }
 
@@ -107,6 +114,14 @@ enum RoomStatus {
   OUT_OF_ORDER
 }
 
+enum PricingPeriod {
+  NIGHT
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
 // Booking Management
 model Booking {
   id              String        @id @default(cuid())
@@ -118,6 +133,7 @@ model Booking {
   totalAmount     Float
   status          BookingStatus @default(PENDING)
   specialRequests String?
+  deletedAt       DateTime?     // Soft deletion field
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -127,6 +143,9 @@ model Booking {
   payment         Payment?
   securityDeposit SecurityDeposit?
   services        BookingService[]
+  notifications   Notification[]
+  receipts        Receipt[]        // Booking-related receipts
+  transactions    Transaction[]    // Booking-related transactions
 
   // Indexes for better PostgreSQL performance
   @@index([userId])
@@ -135,7 +154,8 @@ model Booking {
   @@index([checkIn])
   @@index([checkOut])
   @@index([createdAt])
-  @@index([checkIn, checkOut]) // Composite index for date range queries
+  @@index([deletedAt])                 // Index for soft deletion queries
+  @@index([checkIn, checkOut])         // Composite index for date range queries
 }
 
 enum BookingStatus {
@@ -148,18 +168,168 @@ enum BookingStatus {
 
 // Payment Management
 model Payment {
-  id            String        @id @default(cuid())
-  bookingId     String        @unique
-  amount        Float
-  method        PaymentMethod
-  status        PaymentStatus @default(PENDING)
-  transactionId String?
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                String         @id @default(cuid())
+  bookingId         String         @unique
+  amount            Float
+  method            PaymentMethod
+  status            PaymentStatus  @default(PENDING)
+  transactionId     String?
+  paidAt            DateTime?
+  paymentAccountId  String?        // Link to payment account
+  receiptId         String?        @unique // Link to receipt
+  notes             String?
+  failureReason     String?        // Reason for failed payments
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   // Relations
-  booking Booking @relation(fields: [bookingId], references: [id])
+  booking         Booking         @relation(fields: [bookingId], references: [id])
+  paymentAccount  PaymentAccount? @relation(fields: [paymentAccountId], references: [id])
+  receipt         Receipt?        @relation(fields: [receiptId], references: [id])
+  transactions    Transaction[]   // One payment can have multiple transactions (refunds, partial payments)
+
+  // Indexes
+  @@index([method])
+  @@index([status])
+  @@index([paidAt])
+  @@index([createdAt])
+}
+
+// Payment Accounts - Store customer payment methods
+model PaymentAccount {
+  id              String                @id @default(cuid())
+  userId          String
+  type            PaymentAccountType
+  provider        PaymentProvider       // e.g., STRIPE, PAYPAL, BANK
+  accountNumber   String?               // Last 4 digits or masked account number
+  cardLast4       String?               // For card payments
+  cardBrand       String?               // VISA, MASTERCARD, etc.
+  cardExpMonth    Int?
+  cardExpYear     Int?
+  bankName        String?               // For bank transfers
+  accountName     String?               // Account holder name
+  isDefault       Boolean               @default(false)
+  isActive        Boolean               @default(true)
+  providerData    String?               // JSON string for provider-specific data
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id])
+  payments     Payment[]
+  transactions Transaction[]
+
+  // Indexes
+  @@index([userId])
+  @@index([type])
+  @@index([provider])
+  @@index([isDefault])
+}
+
+// Receipts - Generate receipts for payments
+model Receipt {
+  id              String      @id @default(cuid())
+  receiptNumber   String      @unique
+  paymentId       String?     @unique
+  transactionId   String?     @unique  // Make unique for one-to-one relation
+  bookingId       String?
+  userId          String
+  amount          Float
+  tax             Float       @default(0)
+  discount        Float       @default(0)
+  totalAmount     Float
+  currency        String      @default("GHS")
+  description     String?
+  items           String      // JSON array of receipt items
+  issuedAt        DateTime    @default(now())
+  dueDate         DateTime?
+  paidDate        DateTime?
+  status          ReceiptStatus @default(PENDING)
+  receiptType     ReceiptType @default(PAYMENT)
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id])
+  booking     Booking?     @relation(fields: [bookingId], references: [id])
+  payment     Payment?
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  // Indexes
+  @@index([receiptNumber])
+  @@index([userId])
+  @@index([bookingId])
+  @@index([status])
+  @@index([receiptType])
+  @@index([issuedAt])
+}
+
+// Transactions - Detailed transaction log
+model Transaction {
+  id                String            @id @default(cuid())
+  transactionNumber String            @unique
+  paymentId         String?
+  paymentAccountId  String?
+  bookingId         String?
+  userId            String
+  amount            Float
+  fee               Float             @default(0)
+  netAmount         Float             // amount - fee
+  currency          String            @default("GHS")
+  type              TransactionType
+  status            TransactionStatus @default(PENDING)
+  method            PaymentMethod
+  provider          PaymentProvider?
+  providerTxnId     String?           // Provider's transaction ID
+  reference         String?           // External reference number
+  description       String?
+  metadata          String?           // JSON string for additional data
+  processedAt       DateTime?
+  failureReason     String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  user           User            @relation(fields: [userId], references: [id])
+  payment        Payment?        @relation(fields: [paymentId], references: [id])
+  paymentAccount PaymentAccount? @relation(fields: [paymentAccountId], references: [id])
+  booking        Booking?        @relation(fields: [bookingId], references: [id])
+  receipt        Receipt?
+
+  // Indexes
+  @@index([transactionNumber])
+  @@index([userId])
+  @@index([paymentId])
+  @@index([bookingId])
+  @@index([type])
+  @@index([status])
+  @@index([method])
+  @@index([provider])
+  @@index([createdAt])
+}
+
+// Payment Method Configuration - System-wide payment method settings
+model PaymentMethodConfig {
+  id              String        @id @default(cuid())
+  method          PaymentMethod @unique
+  provider        PaymentProvider
+  isActive        Boolean       @default(true)
+  displayName     String
+  description     String?
+  processingFee   Float         @default(0)
+  feeType         FeeType       @default(PERCENTAGE) // FLAT or PERCENTAGE
+  minAmount       Float?        // Minimum transaction amount
+  maxAmount       Float?        // Maximum transaction amount
+  currencies      String        @default("GHS") // JSON array of supported currencies
+  settings        String?       // JSON string for provider-specific settings
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Indexes
+  @@index([method])
+  @@index([provider])
+  @@index([isActive])
 }
 
 // Security Deposit Management
@@ -198,6 +368,11 @@ enum PaymentMethod {
   DEBIT_CARD
   ONLINE
   BANK_TRANSFER
+  MOBILE_MONEY
+  PAYPAL
+  STRIPE
+  VISA
+  MASTERCARD
 }
 
 enum PaymentStatus {
@@ -205,6 +380,78 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   REFUNDED
+  PARTIALLY_REFUNDED
+  CANCELLED
+}
+
+enum PaymentAccountType {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_ACCOUNT
+  MOBILE_WALLET
+  DIGITAL_WALLET
+  CRYPTO_WALLET
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYPAL
+  VISA
+  MASTERCARD
+  MTN_MOBILE_MONEY
+  VODAFONE_CASH
+  AIRTELTIGO_MONEY
+  GCB_BANK
+  ECOBANK
+  UBA_BANK
+  BANK_OF_GHANA
+  MANUAL
+  CASH_COUNTER
+}
+
+enum ReceiptStatus {
+  PENDING
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+enum ReceiptType {
+  PAYMENT
+  REFUND
+  DEPOSIT
+  INVOICE
+  CREDIT_NOTE
+  ADJUSTMENT
+}
+
+enum TransactionType {
+  PAYMENT
+  REFUND
+  PARTIAL_PAYMENT
+  DEPOSIT
+  WITHDRAWAL
+  ADJUSTMENT
+  FEE
+  REVERSAL
+  CHARGEBACK
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+  REVERSED
+}
+
+enum FeeType {
+  FLAT
+  PERCENTAGE
 }
 
 // Additional Services
@@ -324,6 +571,57 @@ model Analytics {
   avgRating     Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// Notification Management
+model Notification {
+  id        String             @id @default(cuid())
+  bookingId String?
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  channel   NotificationChannel @default(EMAIL)
+  status    NotificationStatus  @default(PENDING)
+  sentAt    DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  // Relations
+  booking Booking? @relation(fields: [bookingId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  // Indexes
+  @@index([userId])
+  @@index([bookingId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  CHECK_IN_REMINDER
+  CHECK_OUT_REMINDER
+  SEVENTY_FIVE_PERCENT_STAY
+  PAYMENT_DUE
+  PAYMENT_RECEIVED
+  MAINTENANCE_NOTICE
+  GENERAL_ANNOUNCEMENT
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  EMAIL_SMS
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
 }
 
 // System Settings

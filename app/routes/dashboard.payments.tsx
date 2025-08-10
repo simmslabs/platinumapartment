@@ -25,12 +25,12 @@ import { format } from "date-fns";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Payment, Booking, User, Room } from "@prisma/client";
+import type { Payment, Booking, User, Room, PaymentAccount, Receipt, Transaction } from "@prisma/client";
 
 export const meta: MetaFunction = () => {
   return [
     { title: "Payments - Apartment Management" },
-    { name: "description", content: "Manage apartment payments" },
+    { name: "description", content: "Manage apartment payments and transactions" },
   ];
 };
 
@@ -39,6 +39,9 @@ type PaymentWithDetails = Payment & {
     user: Pick<User, "firstName" | "lastName" | "email">;
     room: Pick<Room, "number">;
   };
+  paymentAccount?: PaymentAccount | null;
+  receipt?: Receipt | null;
+  transactions: Transaction[];
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -49,6 +52,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const status = url.searchParams.get("status");
   const method = url.searchParams.get("method");
   const search = url.searchParams.get("search");
+  const bookingId = url.searchParams.get("bookingId"); // Get bookingId from URL
 
   // Build where clause for filtering
   const where: any = {};
@@ -93,6 +97,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
       },
+      paymentAccount: true,
+      receipt: true,
+      transactions: {
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -113,7 +124,55 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  return json({ user, payments, unpaidBookings });
+  // If bookingId is provided, also include all bookings for the dropdown
+  // so user can see the selected booking even if it has payment
+  let allBookingsForDropdown = unpaidBookings;
+  if (bookingId) {
+    const allBookings = await db.booking.findMany({
+      where: {
+        status: { not: "CANCELLED" },
+      },
+      include: {
+        user: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+        room: {
+          select: { number: true },
+        },
+        payment: true,
+      },
+    });
+    allBookingsForDropdown = allBookings;
+  }
+
+  // Get payment accounts for payment method selection
+  const paymentAccounts = await db.paymentAccount.findMany({
+    where: {
+      isActive: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  // Get specific booking details if bookingId is provided
+  let selectedBooking = null;
+  if (bookingId) {
+    selectedBooking = await db.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        user: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+        room: {
+          select: { number: true },
+        },
+        payment: true,
+      },
+    });
+  }
+
+  return json({ user, payments, unpaidBookings, paymentAccounts, selectedBooking, bookingId, allBookingsForDropdown });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -124,31 +183,94 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     if (intent === "create") {
       const bookingId = formData.get("bookingId") as string;
-      const method = formData.get("method") as any;
+      const paymentAccountId = formData.get("paymentAccountId") as string;
       const transactionId = formData.get("transactionId") as string;
+      const notes = formData.get("notes") as string;
 
-      if (!bookingId || !method) {
-        return json({ error: "Booking and payment method are required" }, { status: 400 });
+      if (!bookingId || !paymentAccountId) {
+        return json({ error: "Booking and payment account are required" }, { status: 400 });
       }
 
-      // Get booking to get the amount
+      // Get booking to get the amount and check for existing payment
       const booking = await db.booking.findUnique({
         where: { id: bookingId },
+        include: {
+          payment: true,
+        },
       });
 
       if (!booking) {
         return json({ error: "Booking not found" }, { status: 400 });
       }
 
-      await db.payment.create({
+      // Check if booking already has a completed payment
+      if (booking.payment && booking.payment.status === "COMPLETED") {
+        return json({ error: "This booking already has a completed payment" }, { status: 400 });
+      }
+
+      // Get payment account
+      const paymentAccount = await db.paymentAccount.findUnique({
+        where: { id: paymentAccountId },
+      });
+
+      if (!paymentAccount) {
+        return json({ error: "Payment account not found" }, { status: 400 });
+      }
+
+      // Create payment with receipt
+      const payment = await db.payment.create({
         data: {
           bookingId,
           amount: booking.totalAmount,
-          method,
+          method: paymentAccount.type === "CREDIT_CARD" ? "CREDIT_CARD" : 
+                  paymentAccount.type === "DEBIT_CARD" ? "DEBIT_CARD" :
+                  paymentAccount.type === "MOBILE_WALLET" ? "MOBILE_MONEY" : "BANK_TRANSFER",
           status: "COMPLETED",
-          transactionId: transactionId || null,
-          paidAt: new Date(),
+          transactionId: transactionId || `TXN-${Date.now()}`,
+          paymentAccountId,
+          notes,
         },
+      });
+
+      // Create receipt
+      await db.receipt.create({
+        data: {
+          paymentId: payment.id,
+          receiptNumber: `RCP-${Date.now()}`,
+          userId: booking.userId,
+          amount: booking.totalAmount,
+          totalAmount: booking.totalAmount,
+          description: `Payment for Room ${booking.roomId} booking`,
+          items: JSON.stringify([{
+            name: `Room booking`,
+            quantity: 1,
+            price: booking.totalAmount,
+            total: booking.totalAmount
+          }]),
+        },
+      });
+
+      // Create transaction record
+      await db.transaction.create({
+        data: {
+          paymentId: payment.id,
+          transactionNumber: `TXN-${Date.now()}`,
+          userId: booking.userId,
+          amount: booking.totalAmount,
+          netAmount: booking.totalAmount,
+          type: "PAYMENT",
+          status: "COMPLETED",
+          method: payment.method,
+          paymentAccountId,
+          reference: payment.transactionId,
+          description: `Payment for booking ${booking.id}`,
+        },
+      });
+
+      // Auto-update booking status to CONFIRMED when payment is completed
+      await db.booking.update({
+        where: { id: bookingId },
+        data: { status: "CONFIRMED" },
       });
 
       return json({ success: "Payment recorded successfully" });
@@ -161,8 +283,24 @@ export async function action({ request }: ActionFunctionArgs) {
         return json({ error: "Payment ID is required" }, { status: 400 });
       }
 
+      // Get the payment to find the associated booking
+      const payment = await db.payment.findUnique({
+        where: { id: paymentId },
+      });
+
+      if (!payment) {
+        return json({ error: "Payment not found" }, { status: 400 });
+      }
+
+      // Delete the payment
       await db.payment.delete({
         where: { id: paymentId },
+      });
+
+      // Update booking status back to PENDING since payment was deleted
+      await db.booking.update({
+        where: { id: payment.bookingId },
+        data: { status: "PENDING" },
       });
 
       return json({ success: "Payment deleted successfully" });
@@ -172,12 +310,35 @@ export async function action({ request }: ActionFunctionArgs) {
       const paymentId = formData.get("paymentId") as string;
       const status = formData.get("status") as any;
 
+      // Get the payment to find the associated booking
+      const payment = await db.payment.findUnique({
+        where: { id: paymentId },
+      });
+
+      if (!payment) {
+        return json({ error: "Payment not found" }, { status: 400 });
+      }
+
+      // Update payment status
       await db.payment.update({
         where: { id: paymentId },
         data: { 
           status,
           paidAt: status === "COMPLETED" ? new Date() : null,
         },
+      });
+
+      // Update booking status based on payment status
+      let bookingStatus = "PENDING"; // Default for unpaid/failed payments
+      if (status === "COMPLETED") {
+        bookingStatus = "CONFIRMED";
+      } else if (status === "FAILED" || status === "REFUNDED") {
+        bookingStatus = "PENDING"; // Reset to pending if payment failed or refunded
+      }
+
+      await db.booking.update({
+        where: { id: payment.bookingId },
+        data: { status: bookingStatus },
       });
 
       return json({ success: "Payment status updated successfully" });
@@ -191,9 +352,9 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Payments() {
-  const { user, payments, unpaidBookings } = useLoaderData<typeof loader>();
+  const { user, payments, unpaidBookings, paymentAccounts, selectedBooking, bookingId, allBookingsForDropdown } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const [opened, { open, close }] = useDisclosure(false);
+  const [opened, { open, close }] = useDisclosure(!!bookingId); // Auto-open if bookingId is provided
   const [searchParams, setSearchParams] = useSearchParams();
 
   const getStatusColor = (status: Payment["status"]) => {
@@ -258,7 +419,14 @@ export default function Payments() {
     <DashboardLayout user={user}>
       <Stack>
         <Group justify="space-between">
-          <Title order={2}>Payments Management</Title>
+          <div>
+            <Title order={2}>Payments Management</Title>
+            {selectedBooking && (
+              <Text size="sm" c="dimmed">
+                Processing payment for {selectedBooking.user.firstName} {selectedBooking.user.lastName} - Room {selectedBooking.room.number}
+              </Text>
+            )}
+          </div>
           {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && unpaidBookings.length > 0 && (
             <Button leftSection={<IconPlus size={16} />} onClick={open}>
               Record Payment
@@ -288,7 +456,7 @@ export default function Payments() {
           </Alert>
         )}
 
-        {actionData?.error && (
+        {actionData && "error" in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Error"
@@ -298,7 +466,7 @@ export default function Payments() {
           </Alert>
         )}
 
-        {actionData?.success && (
+        {actionData && "success" in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Success"
@@ -381,6 +549,7 @@ export default function Payments() {
                 <Table.Th>Room</Table.Th>
                 <Table.Th>Amount</Table.Th>
                 <Table.Th>Method</Table.Th>
+                <Table.Th>Payment Account</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Transaction ID</Table.Th>
                 <Table.Th>Paid Date</Table.Th>
@@ -410,6 +579,20 @@ export default function Payments() {
                     <Badge color={getMethodColor(payment.method)} size="sm">
                       {payment.method.replace("_", " ")}
                     </Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    {payment.paymentAccount ? (
+                      <div>
+                        <Text size="sm" fw={500}>
+                          {payment.paymentAccount.accountName || `${payment.paymentAccount.type} Account`}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {payment.paymentAccount.provider}
+                        </Text>
+                      </div>
+                    ) : (
+                      <Text size="sm" c="dimmed">Legacy Payment</Text>
+                    )}
                   </Table.Td>
                   <Table.Td>
                     <Badge color={getStatusColor(payment.status)} size="sm">
@@ -493,30 +676,65 @@ export default function Payments() {
           <Form method="post">
             <input type="hidden" name="intent" value="create" />
             <Stack>
+              {selectedBooking && (
+                <Alert
+                  title="Payment for Selected Booking"
+                  color="blue"
+                  variant="light"
+                  mb="md"
+                >
+                  <Text size="sm">
+                    <strong>Guest:</strong> {selectedBooking.user.firstName} {selectedBooking.user.lastName}
+                  </Text>
+                  <Text size="sm">
+                    <strong>Room:</strong> {selectedBooking.room.number}
+                  </Text>
+                  <Text size="sm">
+                    <strong>Amount:</strong> ₵{selectedBooking.totalAmount}
+                  </Text>
+                  {selectedBooking.payment && (
+                    <Text size="sm" c="red">
+                      <strong>Note:</strong> This booking already has a payment recorded.
+                    </Text>
+                  )}
+                </Alert>
+              )}
+              
               <Select
                 label="Booking"
                 placeholder="Select booking"
                 name="bookingId"
-                data={unpaidBookings.map(booking => ({
+                defaultValue={selectedBooking?.id}
+                data={allBookingsForDropdown.map(booking => ({
                   value: booking.id,
-                  label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number} (₵${booking.totalAmount})`
+                  label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number} (₵${booking.totalAmount})${booking.payment ? ' [PAID]' : ''}`
                 }))}
                 required
                 searchable
               />
 
               <Select
-                label="Payment Method"
-                placeholder="Select method"
-                name="method"
-                data={[
-                  { value: "CASH", label: "Cash" },
-                  { value: "CREDIT_CARD", label: "Credit Card" },
-                  { value: "DEBIT_CARD", label: "Debit Card" },
-                  { value: "ONLINE", label: "Online Payment" },
-                  { value: "BANK_TRANSFER", label: "Bank Transfer" },
-                ]}
+                label="Payment Account"
+                placeholder="Select payment account"
+                name="paymentAccountId"
+                data={paymentAccounts.map(account => ({
+                  value: account.id,
+                  label: `${account.accountName || `${account.type} Account`} (${account.type}) - ${account.provider}`
+                }))}
                 required
+                searchable
+              />
+
+              <TextInput
+                label="Transaction ID (Optional)"
+                placeholder="External transaction reference"
+                name="transactionId"
+              />
+
+              <TextInput
+                label="Notes (Optional)"
+                placeholder="Additional payment notes"
+                name="notes"
               />
 
               <Group justify="flex-end">

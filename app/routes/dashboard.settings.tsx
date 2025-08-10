@@ -35,9 +35,9 @@ import {
   IconAlertTriangle,
 } from "@tabler/icons-react";
 import { DashboardLayout } from "~/components/DashboardLayout";
-import { requireUserId } from "~/utils/session.server";
+import { requireUserId, getUser } from "~/utils/session.server";
 import { getApiSettings, updateApiSettings, validateApiSettings, getAllSettings, getSetting } from "~/utils/settings.server";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -48,6 +48,7 @@ export const meta: MetaFunction = () => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
+  const user = await getUser(request);
   
   const settings = await getApiSettings();
   
@@ -60,7 +61,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sessionSecret: settings.sessionSecret ? maskSecret(settings.sessionSecret) : "",
   };
 
-  return json({ settings: maskedSettings });
+  return json({ user, settings: maskedSettings });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -160,12 +161,55 @@ function maskSecret(secret: string): string {
 }
 
 export default function Settings() {
-  const { settings } = useLoaderData<typeof loader>();
+  const { user, settings: initialSettings } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+  
+  // State for current settings with real-time updates
+  const [currentSettings, setCurrentSettings] = useState(initialSettings);
+  const [isDirty, setIsDirty] = useState<Record<string, boolean>>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isSubmitting = navigation.state === "submitting";
+
+  // Update settings state when loader data changes or after successful actions
+  useEffect(() => {
+    if (actionData?.success) {
+      // Refresh settings from server after successful update
+      refreshSettings();
+      setIsDirty({});
+    }
+  }, [actionData]);
+
+  // Function to refresh settings from the server
+  const refreshSettings = async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentSettings(data.settings);
+        setIsDirty({});
+      }
+    } catch (error) {
+      console.error('Failed to refresh settings:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Handle input changes for real-time state updates
+  const handleSettingChange = (field: string, value: string) => {
+    setCurrentSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    setIsDirty(prev => ({
+      ...prev,
+      [field]: value !== initialSettings[field as keyof typeof initialSettings]
+    }));
+  };
 
   const toggleSecret = (field: string) => {
     setShowSecrets(prev => ({ ...prev, [field]: !prev[field] }));
@@ -178,7 +222,7 @@ export default function Settings() {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout user={user}>
       <Stack gap="xl">
         <Group>
           <ThemeIcon size="lg" color="blue">
@@ -188,22 +232,35 @@ export default function Settings() {
             <Title order={2}>Settings</Title>
             <Text c="dimmed">Manage system configuration and API keys (stored in database)</Text>
           </div>
-          <Form method="post" style={{ marginLeft: "auto" }}>
-            <input type="hidden" name="_action" value="syncFromEnv" />
+          <Group style={{ marginLeft: "auto" }} gap="sm">
             <Button
-              type="submit"
-              variant="light"
-              color="blue"
+              variant="subtle"
+              color="gray"
               size="sm"
               leftSection={<IconRefresh size={16} />}
-              loading={isSubmitting}
+              onClick={refreshSettings}
+              loading={isRefreshing}
+              disabled={isSubmitting}
             >
-              Sync from .env
+              Refresh
             </Button>
-          </Form>
+            <Form method="post">
+              <input type="hidden" name="_action" value="syncFromEnv" />
+              <Button
+                type="submit"
+                variant="light"
+                color="blue"
+                size="sm"
+                leftSection={<IconRefresh size={16} />}
+                loading={isSubmitting}
+              >
+                Sync from .env
+              </Button>
+            </Form>
+          </Group>
         </Group>
 
-        {actionData?.success && (
+        {actionData?.success && 'message' in actionData && (
           <Alert
             icon={<IconCheck size={16} />}
             title="Success"
@@ -214,7 +271,7 @@ export default function Settings() {
           </Alert>
         )}
 
-        {actionData?.errors && (
+        {actionData && !actionData.success && 'errors' in actionData && (
           <Alert
             icon={<IconX size={16} />}
             title="Error"
@@ -222,10 +279,21 @@ export default function Settings() {
             variant="light"
           >
             <ul>
-              {actionData.errors.map((error, index) => (
+              {actionData.errors.map((error: string, index: number) => (
                 <li key={index}>{error}</li>
               ))}
             </ul>
+          </Alert>
+        )}
+
+        {Object.values(isDirty).some(Boolean) && (
+          <Alert
+            icon={<IconAlertTriangle size={16} />}
+            title="Unsaved Changes"
+            color="yellow"
+            variant="light"
+          >
+            You have unsaved changes. Make sure to save your settings before leaving this page.
           </Alert>
         )}
 
@@ -266,8 +334,8 @@ export default function Settings() {
                       <Title order={3}>Email Service (Resend)</Title>
                       <Text c="dimmed" size="sm">Configure email notifications and communications</Text>
                     </div>
-                    <Badge color={settings.resendApiKey ? "green" : "red"} variant="light" ml="auto">
-                      {settings.resendApiKey ? "Configured" : "Not Configured"}
+                    <Badge color={currentSettings.resendApiKey ? "green" : "red"} variant="light" ml="auto">
+                      {currentSettings.resendApiKey ? "Configured" : "Not Configured"}
                     </Badge>
                   </Group>
 
@@ -277,8 +345,9 @@ export default function Settings() {
                         label="Resend API Key"
                         description="Get your API key from resend.com dashboard"
                         placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxx"
-                        defaultValue={settings.resendApiKey}
+                        defaultValue={currentSettings.resendApiKey}
                         name="resendApiKey"
+                        onChange={(event) => handleSettingChange('resendApiKey', event.target.value)}
                         visible={showSecrets.resendApiKey}
                         onVisibilityChange={() => toggleSecret('resendApiKey')}
                         rightSection={
@@ -305,8 +374,8 @@ export default function Settings() {
                       <Title order={3}>SMS Service (MNotify)</Title>
                       <Text c="dimmed" size="sm">Configure SMS and WhatsApp notifications</Text>
                     </div>
-                    <Badge color={settings.mnotifyApiKey ? "green" : "red"} variant="light" ml="auto">
-                      {settings.mnotifyApiKey ? "Configured" : "Not Configured"}
+                    <Badge color={currentSettings.mnotifyApiKey ? "green" : "red"} variant="light" ml="auto">
+                      {currentSettings.mnotifyApiKey ? "Configured" : "Not Configured"}
                     </Badge>
                   </Group>
 
@@ -316,8 +385,9 @@ export default function Settings() {
                         label="MNotify API Key"
                         description="Get your API key from mnotify.com dashboard"
                         placeholder="your-mnotify-api-key-here"
-                        defaultValue={settings.mnotifyApiKey}
+                        defaultValue={currentSettings.mnotifyApiKey}
                         name="mnotifyApiKey"
+                        onChange={(event) => handleSettingChange('mnotifyApiKey', event.target.value)}
                         visible={showSecrets.mnotifyApiKey}
                         onVisibilityChange={() => toggleSecret('mnotifyApiKey')}
                         rightSection={
@@ -337,8 +407,9 @@ export default function Settings() {
                         label="Sender ID"
                         description="Your approved sender ID (3-11 characters)"
                         placeholder="ApartmentMgmt"
-                        defaultValue={settings.mnotifySenderId}
+                        defaultValue={currentSettings.mnotifySenderId}
                         name="mnotifySenderId"
+                        onChange={(event) => handleSettingChange('mnotifySenderId', event.target.value)}
                         maxLength={11}
                       />
                     </Grid.Col>
@@ -349,8 +420,9 @@ export default function Settings() {
                       type="submit"
                       loading={isSubmitting}
                       leftSection={<IconCheck size={16} />}
+                      color={Object.values(isDirty).some(Boolean) ? "orange" : "blue"}
                     >
-                      Update API Keys
+                      {Object.values(isDirty).some(Boolean) ? "Save Changes" : "Update API Keys"}
                     </Button>
                   </Group>
                 </Stack>
@@ -389,8 +461,9 @@ export default function Settings() {
                         label="JWT Secret"
                         description="Secret key for JWT token signing (min 32 characters)"
                         placeholder="Generate a secure random string"
-                        defaultValue={settings.jwtSecret}
+                        defaultValue={currentSettings.jwtSecret}
                         name="jwtSecret"
+                        onChange={(event) => handleSettingChange('jwtSecret', event.target.value)}
                         visible={showSecrets.jwtSecret}
                         onVisibilityChange={() => toggleSecret('jwtSecret')}
                         rightSection={
@@ -413,8 +486,9 @@ export default function Settings() {
                         label="Session Secret"
                         description="Secret key for session encryption (min 32 characters)"
                         placeholder="Generate a secure random string"
-                        defaultValue={settings.sessionSecret}
+                        defaultValue={currentSettings.sessionSecret}
                         name="sessionSecret"
+                        onChange={(event) => handleSettingChange('sessionSecret', event.target.value)}
                         visible={showSecrets.sessionSecret}
                         onVisibilityChange={() => toggleSecret('sessionSecret')}
                         rightSection={
@@ -438,10 +512,10 @@ export default function Settings() {
                     <Button
                       type="submit"
                       loading={isSubmitting}
-                      color="red"
+                      color={Object.values(isDirty).some(Boolean) ? "orange" : "red"}
                       leftSection={<IconShield size={16} />}
                     >
-                      Update Security Settings
+                      {Object.values(isDirty).some(Boolean) ? "Save Security Changes" : "Update Security Settings"}
                     </Button>
                   </Group>
                 </Stack>
@@ -471,8 +545,9 @@ export default function Settings() {
                         label="Application URL"
                         description="The base URL where your application is hosted"
                         placeholder="https://yourdomain.com"
-                        defaultValue={settings.appUrl}
+                        defaultValue={currentSettings.appUrl}
                         name="appUrl"
+                        onChange={(event) => handleSettingChange('appUrl', event.target.value)}
                         leftSection={<IconWorld size={16} />}
                       />
                     </Grid.Col>
@@ -483,8 +558,9 @@ export default function Settings() {
                       type="submit"
                       loading={isSubmitting}
                       leftSection={<IconCheck size={16} />}
+                      color={Object.values(isDirty).some(Boolean) ? "orange" : "blue"}
                     >
-                      Update General Settings
+                      {Object.values(isDirty).some(Boolean) ? "Save Changes" : "Update General Settings"}
                     </Button>
                   </Group>
                 </Stack>

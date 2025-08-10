@@ -1,7 +1,5 @@
 import {
   AppShell,
-  Navbar,
-  Header,
   Text,
   Group,
   NavLink,
@@ -11,7 +9,7 @@ import {
   Burger,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { Form, Link, useLoaderData } from "@remix-run/react";
+import { Form, Link } from "@remix-run/react";
 import {
   IconDashboard,
   IconBed,
@@ -46,6 +44,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
     { icon: IconUsers, label: "Guests", link: "/dashboard/guests" },
     { icon: IconUsers, label: "Users", link: "/dashboard/users" },
     { icon: IconCreditCard, label: "Payments", link: "/dashboard/payments" },
+    { icon: IconCreditCard, label: "Payment Accounts", link: "/dashboard/payment-accounts" },
     { icon: IconShield, label: "Security Deposits", link: "/dashboard/security-deposits" },
     { icon: IconBuildingStore, label: "Services", link: "/dashboard/services" },
     { icon: IconTool, label: "Maintenance", link: "/dashboard/maintenance" },
@@ -83,7 +82,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
             <Text size="xl" fw={700} c="blue">
-              🏨 Apartment Management
+              🏨 Platinum Apartment Management
             </Text>
           </Group>
           

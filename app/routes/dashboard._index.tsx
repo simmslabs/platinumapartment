@@ -161,6 +161,7 @@ export default function Dashboard() {
   return (
     <DashboardLayout user={user}>
       <Stack>
+
         <Group justify="space-between">
           <Title order={2}>Dashboard</Title>
           <Badge size="lg" variant="light">
@@ -178,13 +179,11 @@ export default function Dashboard() {
             icon={<IconAlertTriangle size={16} />}
             title="Critical Checkouts Alert"
             color="red"
-            action={
-              <Button component={Link} to="/dashboard/monitoring" size="compact-sm" variant="white">
-                View Details
-              </Button>
-            }
           >
             {stats.criticalCheckouts} tenant(s) need to check out within the next 2 hours!
+            <Button component={Link} to="/dashboard/monitoring" size="compact-sm" variant="white">
+              View Details
+            </Button>
           </Alert>
         )}
 
@@ -197,15 +196,15 @@ export default function Dashboard() {
                     <stat.icon size={24} />
                   </ThemeIcon>
                 </Group>
-                
+
                 <Text size="xl" fw={700} mb="xs">
                   {stat.value}
                 </Text>
-                
+
                 <Text size="sm" fw={500} mb="xs">
                   {stat.title}
                 </Text>
-                
+
                 <Text size="xs" c="dimmed">
                   {stat.description}
                 </Text>
@@ -224,11 +223,11 @@ export default function Dashboard() {
               size="lg"
               radius="md"
               color={
-                stats.occupancyRate > 80 
-                  ? "red" 
-                  : stats.occupancyRate > 60 
-                  ? "yellow" 
-                  : "green"
+                stats.occupancyRate > 80
+                  ? "red"
+                  : stats.occupancyRate > 60
+                    ? "yellow"
+                    : "green"
               }
             />
             <Text size="sm" c="dimmed" mt="xs">

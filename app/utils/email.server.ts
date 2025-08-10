@@ -94,6 +94,28 @@ export const emailService = {
       throw error;
     }
   },
+
+  async sendCustomEmail({ to, subject, html, from }: { to: string; subject: string; html: string; from?: string }) {
+    try {
+      const { data, error } = await resend.emails.send({
+        from: from || 'Platinum Apartment <noreply@platinum-apartment.com>',
+        to: [to],
+        subject,
+        html,
+      });
+
+      if (error) {
+        console.error('Failed to send custom email:', error);
+        throw new Error(`Failed to send custom email: ${error.message}`);
+      }
+
+      console.log('Custom email sent successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error sending custom email:', error);
+      throw error;
+    }
+  },
 };
 
 function generateWelcomeEmailHTML({ firstName, lastName, email, temporaryPassword }: WelcomeEmailData): string {

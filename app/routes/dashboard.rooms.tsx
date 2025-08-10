@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form } from "@remix-run/react";
 import {
   Title,
-  Grid,
+  SimpleGrid,
   Card,
   Text,
   Badge,
@@ -66,6 +66,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const floorStr = formData.get("floor") as string;
       const capacityStr = formData.get("capacity") as string;
       const pricePerNightStr = formData.get("pricePerNight") as string;
+      const pricingPeriod = (formData.get("pricingPeriod") as any) || "NIGHT";
       const description = formData.get("description") as string;
 
       // Validate required fields
@@ -127,6 +128,7 @@ export async function action({ request }: ActionFunctionArgs) {
           floor,
           capacity,
           pricePerNight,
+          pricingPeriod,
           description: description || null,
         },
       });
@@ -246,6 +248,57 @@ export default function Rooms() {
   const [blockFilter, setBlockFilter] = useState<string | null>(null);
   const [floorFilter, setFloorFilter] = useState<string | null>(null);
   const [capacityFilter, setCapacityFilter] = useState<string | null>(null);
+  
+  // Pricing period state for dynamic form updates
+  const [selectedPricingPeriod, setSelectedPricingPeriod] = useState<string>("NIGHT");
+  const [basePrice, setBasePrice] = useState<number>(0);
+
+  // Helper functions for pricing periods
+  const getPeriodLabel = (period: string) => {
+    switch (period) {
+      case "NIGHT": return "night";
+      case "DAY": return "day";
+      case "WEEK": return "week";
+      case "MONTH": return "month";
+      case "YEAR": return "year";
+      default: return "night";
+    }
+  };
+
+  const getPeriodMultiplier = (period: string) => {
+    switch (period) {
+      case "NIGHT": return 1;
+      case "DAY": return 1;
+      case "WEEK": return 7;
+      case "MONTH": return 30;
+      case "YEAR": return 365;
+      default: return 1;
+    }
+  };
+
+  const calculateEquivalentPrice = (price: number, fromPeriod: string, toPeriod: string) => {
+    const fromMultiplier = getPeriodMultiplier(fromPeriod);
+    const toMultiplier = getPeriodMultiplier(toPeriod);
+    return (price / fromMultiplier) * toMultiplier;
+  };
+
+  const formatPriceWithPeriod = (price: number, period: string) => {
+    const label = getPeriodLabel(period);
+    return `₵${price.toLocaleString()}/${label}`;
+  };
+
+  // Reset form when modal opens
+  const handleModalOpen = () => {
+    setSelectedPricingPeriod("NIGHT");
+    setBasePrice(0);
+    open();
+  };
+
+  const handleModalClose = () => {
+    setSelectedPricingPeriod("NIGHT");
+    setBasePrice(0);
+    close();
+  };
 
   // Get unique values for filter options
   const filterOptions = useMemo(() => {
@@ -396,7 +449,7 @@ export default function Rooms() {
                 >
                   Create Block
                 </Button>
-                <Button leftSection={<IconPlus size={16} />} onClick={open}>
+                <Button leftSection={<IconPlus size={16} />} onClick={handleModalOpen}>
                   Add Room
                 </Button>
               </>
@@ -411,10 +464,9 @@ export default function Rooms() {
               <IconBuilding size={20} />
               <Text fw={500}>Block Overview</Text>
             </Group>
-            <Grid>
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }}>
               {blockStats.map((block) => (
-                <Grid.Col key={block.name} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
-                  <Card p="sm" withBorder>
+                <Card key={block.name} p="sm" withBorder>
                     <Group justify="space-between" mb="xs">
                       <Text fw={600}>Block {block.name}</Text>
                       {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
@@ -462,9 +514,8 @@ export default function Rooms() {
                       )}
                     </Stack>
                   </Card>
-                </Grid.Col>
               ))}
-            </Grid>
+            </SimpleGrid>
           </Paper>
         )}
 
@@ -500,18 +551,15 @@ export default function Rooms() {
             )}
           </Group>
           
-          <Grid>
-            <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-              <TextInput
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 6 }}>
+            <TextInput
                 placeholder="Search rooms (try A-101)..."
                 leftSection={<IconSearch size={16} />}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.currentTarget.value)}
               />
-            </Grid.Col>
             
-            <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-              <Select
+            <Select
                 placeholder="All Statuses"
                 data={[
                   { value: "AVAILABLE", label: "Available" },
@@ -523,10 +571,8 @@ export default function Rooms() {
                 onChange={setStatusFilter}
                 clearable
               />
-            </Grid.Col>
             
-            <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-              <Select
+            <Select
                 placeholder="All Types"
                 data={[
                   { value: "SINGLE", label: "Single" },
@@ -539,38 +585,31 @@ export default function Rooms() {
                 onChange={setTypeFilter}
                 clearable
               />
-            </Grid.Col>
             
-            <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-              <Select
+            <Select
                 placeholder="All Blocks"
                 data={filterOptions.blocks}
                 value={blockFilter}
                 onChange={setBlockFilter}
                 clearable
               />
-            </Grid.Col>
             
-            <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-              <Select
+            <Select
                 placeholder="All Floors"
                 data={filterOptions.floors}
                 value={floorFilter}
                 onChange={setFloorFilter}
                 clearable
               />
-            </Grid.Col>
             
-            <Grid.Col span={{ base: 12, sm: 6, md: 4, lg: 2 }}>
-              <Select
+            <Select
                 placeholder="All Capacities"
                 data={filterOptions.capacities}
                 value={capacityFilter}
                 onChange={setCapacityFilter}
                 clearable
               />
-            </Grid.Col>
-          </Grid>
+          </SimpleGrid>
           
           <Divider my="md" />
           
@@ -615,10 +654,9 @@ export default function Rooms() {
                   </Badge>
                 </Group>
                 
-                <Grid>
+                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
                   {blockRooms.map((room) => (
-                    <Grid.Col key={room.id} span={{ base: 12, sm: 6, lg: 4 }}>
-                      <Card shadow="sm" p="lg" h="100%">
+                    <Card key={room.id} shadow="sm" p="lg" h="100%">
                         <Group justify="space-between" mb="md">
                           <Text fw={600} size="lg">
                             Room {room.number}
@@ -633,7 +671,7 @@ export default function Rooms() {
                             <strong>Type:</strong> {room.type.replace("_", " ")}
                           </Text>
                           <Text size="sm">
-                            <strong>Block:</strong> {room.block}
+                            <strong>Block:</strong> {room.blockRelation ? `${room.blockRelation.name} - ${room.blockRelation.description}` : room.block}
                           </Text>
                           <Text size="sm">
                             <strong>Floor:</strong> {room.floor}
@@ -642,7 +680,7 @@ export default function Rooms() {
                             <strong>Capacity:</strong> {room.capacity} guests
                           </Text>
                           <Text size="sm">
-                            <strong>Price:</strong> ₵{room.pricePerNight}/night
+                            <strong>Price:</strong> {formatPriceWithPeriod(room.pricePerNight, room.pricingPeriod || "NIGHT")}
                           </Text>
                           {room.description && (
                             <Text size="sm" c="dimmed">
@@ -680,15 +718,14 @@ export default function Rooms() {
                           </Form>
                         )}
                       </Card>
-                    </Grid.Col>
                   ))}
-                </Grid>
+                </SimpleGrid>
               </div>
             ))}
           </Stack>
         )}
 
-        <Modal opened={opened} onClose={close} title="Add New Room" size="lg">
+        <Modal opened={opened} onClose={handleModalClose} title="Add New Room" size="lg">
           <Form method="post">
             <input type="hidden" name="intent" value="create" />
             <Stack>
@@ -717,15 +754,14 @@ export default function Rooms() {
                 label="Block"
                 placeholder="Select existing block or create new one"
                 name="block"
-                data={blocks.map(block => ({ value: block.name, label: `Block ${block.name}` }))}
+                data={blocks.map(block => ({ 
+                  value: block.name, 
+                  label: `Block ${block.name} - ${block.description || 'No description'}` 
+                }))}
+                required
                 searchable
                 creatable
-                getCreateLabel={(query) => `Create Block "${query}"`}
-                onCreate={(query) => {
-                  const item = { value: query, label: `Block ${query}` };
-                  return item;
-                }}
-                required
+                getCreateLabel={(query) => `+ Create Block "${query}"`}
               />
 
               <Group grow>
@@ -745,15 +781,52 @@ export default function Rooms() {
                 />
               </Group>
 
-              <TextInput
-                label="Price per Night (₵)"
-                placeholder="100.00"
-                name="pricePerNight"
-                type="number"
-                min={0}
-                step="0.01"
-                required
-              />
+              <Group grow>
+                <Select
+                  label="Pricing Period"
+                  placeholder="Select pricing period"
+                  name="pricingPeriod"
+                  value={selectedPricingPeriod}
+                  onChange={(value) => setSelectedPricingPeriod(value || "NIGHT")}
+                  data={[
+                    { value: "NIGHT", label: "Per Night" },
+                    { value: "DAY", label: "Per Day" },
+                    { value: "WEEK", label: "Per Week" },
+                    { value: "MONTH", label: "Per Month" },
+                    { value: "YEAR", label: "Per Year" },
+                  ]}
+                  required
+                />
+                <NumberInput
+                  label={`Price per ${getPeriodLabel(selectedPricingPeriod)} (₵)`}
+                  placeholder="100.00"
+                  name="pricePerNight"
+                  min={0}
+                  step="0.01"
+                  value={basePrice}
+                  onChange={(value) => setBasePrice(Number(value) || 0)}
+                  required
+                />
+              </Group>
+
+              {/* Price Conversion Display */}
+              {basePrice > 0 && (
+                <Paper p="sm" withBorder bg="gray.0">
+                  <Text size="sm" fw={500} mb="xs">Equivalent Pricing:</Text>
+                  <Group gap="md">
+                    {["NIGHT", "DAY", "WEEK", "MONTH", "YEAR"]
+                      .filter(period => period !== selectedPricingPeriod)
+                      .map(period => (
+                        <Text key={period} size="xs" c="dimmed">
+                          {formatPriceWithPeriod(
+                            calculateEquivalentPrice(basePrice, selectedPricingPeriod, period),
+                            period
+                          )}
+                        </Text>
+                      ))}
+                  </Group>
+                </Paper>
+              )}
 
               <Textarea
                 label="Description"

@@ -39,7 +39,7 @@ import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { SecurityDeposit, Booking, User, Room } from "@prisma/client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -234,6 +234,38 @@ export default function SecurityDeposits() {
   const [refundOpened, { open: openRefund, close: closeRefund }] = useDisclosure(false);
   const [selectedDeposit, setSelectedDeposit] = useState<SecurityDepositWithDetails | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Refund form state
+  const [refundAmount, setRefundAmount] = useState<number>(0);
+  const [deductionAmount, setDeductionAmount] = useState<number>(0);
+  const [deductionReason, setDeductionReason] = useState<string>("");
+  const [damageReport, setDamageReport] = useState<string>("");
+
+  // Auto-calculate deduction amount when refund amount changes
+  useEffect(() => {
+    if (selectedDeposit && refundAmount >= 0) {
+      const calculatedDeduction = selectedDeposit.amount - refundAmount;
+      setDeductionAmount(Math.max(0, calculatedDeduction));
+    }
+  }, [refundAmount, selectedDeposit]);
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (selectedDeposit && refundOpened) {
+      setRefundAmount(selectedDeposit.amount);
+      setDeductionAmount(0);
+      setDeductionReason("");
+      setDamageReport("");
+    }
+  }, [selectedDeposit, refundOpened]);
+
+  // Validation function
+  const isValidRefundForm = () => {
+    if (!selectedDeposit) return false;
+    if (refundAmount + deductionAmount !== selectedDeposit.amount) return false;
+    if (deductionAmount > 0 && !deductionReason.trim()) return false;
+    return true;
+  };
 
   const getStatusColor = (status: SecurityDeposit["status"]) => {
     switch (status) {
@@ -283,8 +315,23 @@ export default function SecurityDeposits() {
     setSearchParams({});
   };
 
-  const openRefundModal = (deposit: SecurityDepositWithDetails) => {
-    setSelectedDeposit(deposit);
+  const openRefundModal = (deposit: any) => {
+    // Convert serialized dates back to Date objects for state management
+    const convertedDeposit: SecurityDepositWithDetails = {
+      ...deposit,
+      createdAt: deposit.createdAt ? new Date(deposit.createdAt) : new Date(),
+      updatedAt: deposit.updatedAt ? new Date(deposit.updatedAt) : new Date(),
+      paidAt: deposit.paidAt ? new Date(deposit.paidAt) : null,
+      refundedAt: deposit.refundedAt ? new Date(deposit.refundedAt) : null,
+      booking: {
+        ...deposit.booking,
+        createdAt: deposit.booking.createdAt ? new Date(deposit.booking.createdAt) : new Date(),
+        updatedAt: deposit.booking.updatedAt ? new Date(deposit.booking.updatedAt) : new Date(),
+        checkIn: deposit.booking.checkIn ? new Date(deposit.booking.checkIn) : new Date(),
+        checkOut: deposit.booking.checkOut ? new Date(deposit.booking.checkOut) : new Date(),
+      },
+    };
+    setSelectedDeposit(convertedDeposit);
     openRefund();
   };
 
@@ -323,7 +370,7 @@ export default function SecurityDeposits() {
           )}
         </Group>
 
-        {actionData?.error && (
+        {actionData && "error" in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Error"
@@ -333,7 +380,7 @@ export default function SecurityDeposits() {
           </Alert>
         )}
 
-        {actionData?.success && (
+        {actionData && "success" in actionData && (
           <Alert
             icon={<IconCheck size={16} />}
             title="Success"
@@ -613,6 +660,10 @@ export default function SecurityDeposits() {
             <Form method="post">
               <input type="hidden" name="intent" value="refund" />
               <input type="hidden" name="depositId" value={selectedDeposit.id} />
+              <input type="hidden" name="refundAmount" value={refundAmount} />
+              <input type="hidden" name="deductionAmount" value={deductionAmount} />
+              <input type="hidden" name="deductionReason" value={deductionReason} />
+              <input type="hidden" name="damageReport" value={damageReport} />
               <Stack>
                 <Alert
                   icon={<IconInfoCircle size={16} />}
@@ -627,52 +678,152 @@ export default function SecurityDeposits() {
                     Room: {selectedDeposit.booking.room.number}
                   </Text>
                   <Text size="sm">
-                    Original Deposit: ₵{selectedDeposit.amount}
+                    Original Deposit: ₵{selectedDeposit.amount.toLocaleString()}
                   </Text>
                 </Alert>
 
                 <NumberInput
                   label="Refund Amount"
                   placeholder="Enter refund amount"
-                  name="refundAmount"
+                  value={refundAmount}
+                  onChange={(value) => setRefundAmount(Number(value) || 0)}
                   min={0}
                   max={selectedDeposit.amount}
                   step={0.01}
                   required
                   leftSection="₵"
-                  defaultValue={selectedDeposit.amount}
+                  description="Enter the amount to be refunded to the guest"
                 />
 
+                {/* Quick Action Buttons */}
+                <Group gap="xs" wrap="wrap">
+                  <Text size="sm" c="dimmed" w="100%">Quick Actions:</Text>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="green"
+                    onClick={() => setRefundAmount(selectedDeposit.amount)}
+                  >
+                    Full Refund
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="orange"
+                    onClick={() => setRefundAmount(selectedDeposit.amount * 0.8)}
+                  >
+                    80% Refund
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="orange"
+                    onClick={() => setRefundAmount(selectedDeposit.amount * 0.5)}
+                  >
+                    50% Refund
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="red"
+                    onClick={() => setRefundAmount(0)}
+                  >
+                    No Refund
+                  </Button>
+                </Group>
+
                 <NumberInput
-                  label="Deduction Amount (for damages)"
-                  placeholder="Enter deduction amount"
-                  name="deductionAmount"
+                  label="Deduction Amount (Auto-calculated)"
+                  placeholder="Automatically calculated"
+                  value={deductionAmount}
+                  onChange={(value) => {
+                    const newDeduction = Number(value) || 0;
+                    setDeductionAmount(newDeduction);
+                    setRefundAmount(selectedDeposit.amount - newDeduction);
+                  }}
                   min={0}
                   max={selectedDeposit.amount}
                   step={0.01}
                   leftSection="₵"
-                  defaultValue={0}
+                  description={`Automatically calculated: ₵${selectedDeposit.amount.toLocaleString()} - ₵${refundAmount.toLocaleString()} = ₵${deductionAmount.toLocaleString()}`}
+                  error={
+                    (refundAmount + deductionAmount !== selectedDeposit.amount) 
+                      ? `Total must equal ₵${selectedDeposit.amount.toLocaleString()}` 
+                      : null
+                  }
                 />
 
-                <TextInput
-                  label="Deduction Reason"
-                  placeholder="Reason for deduction (if any)"
-                  name="deductionReason"
-                />
+                {deductionAmount > 0 && (
+                  <>
+                    <TextInput
+                      label="Deduction Reason *"
+                      placeholder="Reason for deduction (required when deducting)"
+                      value={deductionReason}
+                      onChange={(event) => setDeductionReason(event.currentTarget.value)}
+                      required={deductionAmount > 0}
+                      error={deductionAmount > 0 && !deductionReason.trim() ? "Deduction reason is required" : null}
+                    />
 
-                <Textarea
-                  label="Damage Report"
-                  placeholder="Detailed damage report (if applicable)"
-                  name="damageReport"
-                  rows={4}
-                />
+                    <Textarea
+                      label="Damage Report"
+                      placeholder="Detailed damage report and assessment"
+                      value={damageReport}
+                      onChange={(event) => setDamageReport(event.currentTarget.value)}
+                      rows={4}
+                      description="Provide detailed information about damages or reasons for deduction"
+                    />
+                  </>
+                )}
+
+                {/* Summary Alert */}
+                <Alert
+                  icon={deductionAmount > 0 ? <IconAlertTriangle size={16} /> : <IconCheck size={16} />}
+                  color={deductionAmount > 0 ? "orange" : "green"}
+                  variant="light"
+                >
+                  <Group justify="space-between">
+                    <Text size="sm" fw={500}>Transaction Summary:</Text>
+                  </Group>
+                  <Divider my="xs" />
+                  <Group justify="space-between">
+                    <Text size="sm">Original Deposit:</Text>
+                    <Text size="sm" fw={500}>₵{selectedDeposit.amount.toLocaleString()}</Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text size="sm">Refund to Guest:</Text>
+                    <Text size="sm" fw={500} c="green">₵{refundAmount.toLocaleString()}</Text>
+                  </Group>
+                  {deductionAmount > 0 && (
+                    <Group justify="space-between">
+                      <Text size="sm">Deduction:</Text>
+                      <Text size="sm" fw={500} c="red">₵{deductionAmount.toLocaleString()}</Text>
+                    </Group>
+                  )}
+                  <Divider my="xs" />
+                  <Group justify="space-between">
+                    <Text size="sm" fw={600}>Status:</Text>
+                    <Badge 
+                      color={deductionAmount === 0 ? "green" : refundAmount === 0 ? "red" : "orange"}
+                      variant="filled"
+                    >
+                      {deductionAmount === 0 ? "FULL REFUND" : 
+                       refundAmount === 0 ? "FORFEITED" : "PARTIAL REFUND"}
+                    </Badge>
+                  </Group>
+                </Alert>
 
                 <Group justify="flex-end">
                   <Button variant="outline" onClick={closeRefund}>
                     Cancel
                   </Button>
-                  <Button type="submit" onClick={closeRefund}>
-                    Process Refund
+                  <Button 
+                    type="submit" 
+                    onClick={closeRefund}
+                    disabled={!isValidRefundForm()}
+                    color={deductionAmount > 0 ? "orange" : "green"}
+                  >
+                    {deductionAmount === 0 ? "Process Full Refund" : 
+                     refundAmount === 0 ? "Forfeit Deposit" : "Process Partial Refund"}
                   </Button>
                 </Group>
               </Stack>

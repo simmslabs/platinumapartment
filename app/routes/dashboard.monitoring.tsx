@@ -61,14 +61,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const next2Months = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000); // 60 days
 
-  // Get bookings with upcoming checkouts
+  // Get bookings with upcoming checkouts (include both confirmed and checked-in)
   const upcomingCheckouts = await db.booking.findMany({
     where: {
       checkOut: {
         gte: now,
         lte: next2Months,
       },
-      status: "CHECKED_IN",
+      status: { in: ["CONFIRMED", "CHECKED_IN"] }, // Include both statuses for upcoming checkouts
     },
     include: {
       user: {
@@ -106,13 +106,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { checkIn: "asc" },
   });
 
-  // Get overdue checkouts
+  // Get overdue checkouts (include both confirmed and checked-in)
   const overdueCheckouts = await db.booking.findMany({
     where: {
       checkOut: {
         lt: now,
       },
-      status: "CHECKED_IN",
+      status: { in: ["CONFIRMED", "CHECKED_IN"] }, // Include both statuses for overdue
     },
     include: {
       user: {
@@ -123,6 +123,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     },
     orderBy: { checkOut: "asc" },
+  });
+
+  // Debug logging to help identify issues
+  console.log("Monitoring Dashboard Debug:", {
+    now: now.toISOString(),
+    next2Months: next2Months.toISOString(),
+    upcomingCheckoutsCount: upcomingCheckouts.length,
+    overdueCheckoutsCount: overdueCheckouts.length,
+    todayCheckInsCount: todayCheckIns.length,
+    sampleUpcomingCheckout: upcomingCheckouts[0] ? {
+      id: upcomingCheckouts[0].id,
+      checkOut: upcomingCheckouts[0].checkOut,
+      status: upcomingCheckouts[0].status,
+      user: upcomingCheckouts[0].user.firstName + " " + upcomingCheckouts[0].user.lastName
+    } : null
   });
 
   return json({ 
@@ -221,40 +236,70 @@ export default function Monitoring() {
   }, []);
 
   const getUrgencyLevel = (checkoutDate: string) => {
-    const checkout = new Date(checkoutDate);
-    const hoursUntil = differenceInHours(checkout, currentDateTime);
-    
-    if (hoursUntil <= 2) return { level: "critical", color: "red", label: "Critical" };
-    if (hoursUntil <= 6) return { level: "high", color: "orange", label: "High" };
-    if (hoursUntil <= 12) return { level: "medium", color: "yellow", label: "Medium" };
-    return { level: "low", color: "blue", label: "Low" };
-  };
-
-  const getTimeRemaining = (checkoutDate: string) => {
-    const checkout = new Date(checkoutDate);
-    const hoursUntil = differenceInHours(checkout, currentDateTime);
-    const minutesUntil = differenceInMinutes(checkout, currentDateTime) % 60;
-    
-    if (hoursUntil < 1) {
-      return `${minutesUntil} minutes`;
-    } else if (hoursUntil < 24) {
-      return `${hoursUntil}h ${minutesUntil}m`;
-    } else {
-      const days = Math.floor(hoursUntil / 24);
-      const remainingHours = hoursUntil % 24;
-      if (days < 30) {
-        return `${days}d ${remainingHours}h`;
-      } else {
-        const months = Math.floor(days / 30);
-        const remainingDays = days % 30;
-        return `${months}mo ${remainingDays}d`;
+    try {
+      const checkout = new Date(checkoutDate);
+      if (isNaN(checkout.getTime())) {
+        console.error("Invalid checkout date:", checkoutDate);
+        return { level: "low", color: "gray", label: "Unknown" };
       }
+      
+      const hoursUntil = differenceInHours(checkout, currentDateTime);
+      
+      if (hoursUntil <= 2) return { level: "critical", color: "red", label: "Critical" };
+      if (hoursUntil <= 6) return { level: "high", color: "orange", label: "High" };
+      if (hoursUntil <= 12) return { level: "medium", color: "yellow", label: "Medium" };
+      return { level: "low", color: "blue", label: "Low" };
+    } catch (error) {
+      console.error("Error calculating urgency level:", error);
+      return { level: "low", color: "gray", label: "Error" };
     }
   };
 
-  const criticalCheckouts = upcomingCheckouts.filter(booking => 
-    differenceInHours(new Date(booking.checkOut), currentDateTime) <= 2
-  );
+  const getTimeRemaining = (checkoutDate: string) => {
+    try {
+      const checkout = new Date(checkoutDate);
+      if (isNaN(checkout.getTime())) {
+        console.error("Invalid checkout date:", checkoutDate);
+        return "Invalid date";
+      }
+      
+      const hoursUntil = differenceInHours(checkout, currentDateTime);
+      const minutesUntil = differenceInMinutes(checkout, currentDateTime) % 60;
+      
+      if (hoursUntil < 0) {
+        // Past checkout time
+        const hoursOverdue = Math.abs(hoursUntil);
+        const minutesOverdue = Math.abs(minutesUntil);
+        if (hoursOverdue < 1) {
+          return `${minutesOverdue}m overdue`;
+        } else {
+          return `${hoursOverdue}h ${minutesOverdue}m overdue`;
+        }
+      } else if (hoursUntil < 1) {
+        return `${minutesUntil} minutes`;
+      } else if (hoursUntil < 24) {
+        return `${hoursUntil}h ${Math.abs(minutesUntil)}m`;
+      } else {
+        const days = Math.floor(hoursUntil / 24);
+        const remainingHours = hoursUntil % 24;
+        if (days < 30) {
+          return `${days}d ${remainingHours}h`;
+        } else {
+          const months = Math.floor(days / 30);
+          const remainingDays = days % 30;
+          return `${months}mo ${remainingDays}d`;
+        }
+      }
+    } catch (error) {
+      console.error("Error calculating time remaining:", error);
+      return "Calculation error";
+    }
+  };
+
+  const criticalCheckouts = upcomingCheckouts.filter(booking => {
+    const hoursUntil = differenceInHours(new Date(booking.checkOut), currentDateTime);
+    return hoursUntil <= 2 && hoursUntil >= 0; // Only include future checkouts within 2 hours
+  });
 
   const openNotificationModal = (booking: any, messageType: string) => {
     setSelectedGuest({
@@ -453,28 +498,33 @@ export default function Monitoring() {
 
         {/* Upcoming Checkouts */}
         <Card>
-            <Group mb="md">
-              <ThemeIcon color="orange" size="lg">
-                <IconClock size={20} />
-              </ThemeIcon>
-              <Title order={3}>Upcoming Checkouts (Next 2 Months)</Title>
-              {upcomingCheckouts.length > 0 && (
-                <Button
-                  color="orange"
-                  size="xs"
-                  variant="light"
-                  leftSection={<IconMessage size={14} />}
-                  onClick={() => sendBulkReminders(upcomingCheckouts, 'checkout_reminder')}
-                  ml="auto"
-                >
-                  Send Reminders
-                </Button>
-              )}
-            </Group>          {upcomingCheckouts.length === 0 ? (
+          <Group mb="md">
+            <ThemeIcon color="orange" size="lg">
+              <IconClock size={20} />
+            </ThemeIcon>
+            <Title order={3}>Upcoming Checkouts ({upcomingCheckouts.length})</Title>
+            {upcomingCheckouts.length > 0 && (
+              <Button
+                color="orange"
+                size="xs"
+                variant="light"
+                leftSection={<IconMessage size={14} />}
+                onClick={() => sendBulkReminders(upcomingCheckouts, 'checkout_reminder')}
+                ml="auto"
+              >
+                Send Reminders
+              </Button>
+            )}
+          </Group>
+          
+          {upcomingCheckouts.length === 0 ? (
             <Center p="xl">
               <Stack align="center">
                 <IconInfoCircle size={48} color="gray" />
                 <Text c="dimmed">No upcoming checkouts in the next 2 months</Text>
+                <Text size="xs" c="dimmed">
+                  This includes both confirmed and checked-in bookings
+                </Text>
               </Stack>
             </Center>
           ) : (
