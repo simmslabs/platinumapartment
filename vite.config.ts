@@ -7,9 +7,6 @@ import { vercelPreset } from "@vercel/remix/vite";
 installGlobals();
 
 export default defineConfig({
-  ssr: {
-    external: ["@prisma/client"]
-  },
   plugins: [
     remix({
       presets: [vercelPreset()],
