@@ -1,0 +1,424 @@
+{
+  "buildManifest": {
+    "serverBundles": {
+      "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0": {
+        "id": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+        "file": "build/server/nodejs-eyJydW50aW1lIjoibm9kZWpzIn0/index.js",
+        "config": {
+          "runtime": "nodejs"
+        }
+      }
+    },
+    "routeIdToServerBundleId": {
+      "routes/dashboard.security-deposits": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.payment-accounts": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.guests.$guestId": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.cron.notifications": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.maintenance": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.monitoring": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.analytics": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.reports.export": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.bookings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.payments": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.settings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.guests.import": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.reports": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.guests": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard._index": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.rooms": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.users": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.settings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/register": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/health": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/logout": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/_index": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/login": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0"
+    },
+    "routes": {
+      "root": {
+        "path": "",
+        "id": "root",
+        "file": "app/root.tsx",
+        "config": {}
+      },
+      "routes/dashboard.security-deposits": {
+        "file": "app/routes/dashboard.security-deposits.tsx",
+        "id": "routes/dashboard.security-deposits",
+        "path": "dashboard/security-deposits",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.payment-accounts": {
+        "file": "app/routes/dashboard.payment-accounts.tsx",
+        "id": "routes/dashboard.payment-accounts",
+        "path": "dashboard/payment-accounts",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.guests.$guestId": {
+        "file": "app/routes/dashboard.guests.$guestId.tsx",
+        "id": "routes/dashboard.guests.$guestId",
+        "path": ":guestId",
+        "parentId": "routes/dashboard.guests",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.cron.notifications": {
+        "file": "app/routes/api.cron.notifications.tsx",
+        "id": "routes/api.cron.notifications",
+        "path": "api/cron/notifications",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.maintenance": {
+        "file": "app/routes/dashboard.maintenance.tsx",
+        "id": "routes/dashboard.maintenance",
+        "path": "dashboard/maintenance",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.monitoring": {
+        "file": "app/routes/dashboard.monitoring.tsx",
+        "id": "routes/dashboard.monitoring",
+        "path": "dashboard/monitoring",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.analytics": {
+        "file": "app/routes/dashboard.analytics.tsx",
+        "id": "routes/dashboard.analytics",
+        "path": "dashboard/analytics",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.reports.export": {
+        "file": "app/routes/api.reports.export.tsx",
+        "id": "routes/api.reports.export",
+        "path": "api/reports/export",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.bookings": {
+        "file": "app/routes/dashboard.bookings.tsx",
+        "id": "routes/dashboard.bookings",
+        "path": "dashboard/bookings",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.payments": {
+        "file": "app/routes/dashboard.payments.tsx",
+        "id": "routes/dashboard.payments",
+        "path": "dashboard/payments",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.settings": {
+        "file": "app/routes/dashboard.settings.tsx",
+        "id": "routes/dashboard.settings",
+        "path": "dashboard/settings",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.guests.import": {
+        "file": "app/routes/api.guests.import.tsx",
+        "id": "routes/api.guests.import",
+        "path": "api/guests/import",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.reports": {
+        "file": "app/routes/dashboard.reports.tsx",
+        "id": "routes/dashboard.reports",
+        "path": "dashboard/reports",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.guests": {
+        "file": "app/routes/dashboard.guests.tsx",
+        "id": "routes/dashboard.guests",
+        "path": "dashboard/guests",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard._index": {
+        "file": "app/routes/dashboard._index.tsx",
+        "id": "routes/dashboard._index",
+        "path": "dashboard",
+        "index": true,
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.rooms": {
+        "file": "app/routes/dashboard.rooms.tsx",
+        "id": "routes/dashboard.rooms",
+        "path": "dashboard/rooms",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.users": {
+        "file": "app/routes/dashboard.users.tsx",
+        "id": "routes/dashboard.users",
+        "path": "dashboard/users",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.settings": {
+        "file": "app/routes/api.settings.tsx",
+        "id": "routes/api.settings",
+        "path": "api/settings",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/register": {
+        "file": "app/routes/register.tsx",
+        "id": "routes/register",
+        "path": "register",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/health": {
+        "file": "app/routes/health.tsx",
+        "id": "routes/health",
+        "path": "health",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/logout": {
+        "file": "app/routes/logout.tsx",
+        "id": "routes/logout",
+        "path": "logout",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/_index": {
+        "file": "app/routes/_index.tsx",
+        "id": "routes/_index",
+        "index": true,
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/login": {
+        "file": "app/routes/login.tsx",
+        "id": "routes/login",
+        "path": "login",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      }
+    }
+  },
+  "remixConfig": {
+    "appDirectory": "D:\\Workspace\\RemixJS\\apartment\\app",
+    "basename": "/",
+    "buildDirectory": "D:\\Workspace\\RemixJS\\apartment\\build",
+    "future": {
+      "v3_fetcherPersist": true,
+      "v3_relativeSplatPath": true,
+      "v3_throwAbortReason": true,
+      "v3_routeConfig": false,
+      "v3_singleFetch": true,
+      "v3_lazyRouteDiscovery": true,
+      "unstable_optimizeDeps": false
+    },
+    "manifest": false,
+    "publicPath": "/",
+    "routes": {
+      "root": {
+        "path": "",
+        "id": "root",
+        "file": "root.tsx"
+      },
+      "routes/dashboard.security-deposits": {
+        "file": "routes/dashboard.security-deposits.tsx",
+        "id": "routes/dashboard.security-deposits",
+        "path": "dashboard/security-deposits",
+        "parentId": "root"
+      },
+      "routes/dashboard.payment-accounts": {
+        "file": "routes/dashboard.payment-accounts.tsx",
+        "id": "routes/dashboard.payment-accounts",
+        "path": "dashboard/payment-accounts",
+        "parentId": "root"
+      },
+      "routes/dashboard.guests.$guestId": {
+        "file": "routes/dashboard.guests.$guestId.tsx",
+        "id": "routes/dashboard.guests.$guestId",
+        "path": ":guestId",
+        "parentId": "routes/dashboard.guests"
+      },
+      "routes/api.cron.notifications": {
+        "file": "routes/api.cron.notifications.tsx",
+        "id": "routes/api.cron.notifications",
+        "path": "api/cron/notifications",
+        "parentId": "root"
+      },
+      "routes/dashboard.maintenance": {
+        "file": "routes/dashboard.maintenance.tsx",
+        "id": "routes/dashboard.maintenance",
+        "path": "dashboard/maintenance",
+        "parentId": "root"
+      },
+      "routes/dashboard.monitoring": {
+        "file": "routes/dashboard.monitoring.tsx",
+        "id": "routes/dashboard.monitoring",
+        "path": "dashboard/monitoring",
+        "parentId": "root"
+      },
+      "routes/dashboard.analytics": {
+        "file": "routes/dashboard.analytics.tsx",
+        "id": "routes/dashboard.analytics",
+        "path": "dashboard/analytics",
+        "parentId": "root"
+      },
+      "routes/api.reports.export": {
+        "file": "routes/api.reports.export.tsx",
+        "id": "routes/api.reports.export",
+        "path": "api/reports/export",
+        "parentId": "root"
+      },
+      "routes/dashboard.bookings": {
+        "file": "routes/dashboard.bookings.tsx",
+        "id": "routes/dashboard.bookings",
+        "path": "dashboard/bookings",
+        "parentId": "root"
+      },
+      "routes/dashboard.payments": {
+        "file": "routes/dashboard.payments.tsx",
+        "id": "routes/dashboard.payments",
+        "path": "dashboard/payments",
+        "parentId": "root"
+      },
+      "routes/dashboard.settings": {
+        "file": "routes/dashboard.settings.tsx",
+        "id": "routes/dashboard.settings",
+        "path": "dashboard/settings",
+        "parentId": "root"
+      },
+      "routes/api.guests.import": {
+        "file": "routes/api.guests.import.tsx",
+        "id": "routes/api.guests.import",
+        "path": "api/guests/import",
+        "parentId": "root"
+      },
+      "routes/dashboard.reports": {
+        "file": "routes/dashboard.reports.tsx",
+        "id": "routes/dashboard.reports",
+        "path": "dashboard/reports",
+        "parentId": "root"
+      },
+      "routes/dashboard.guests": {
+        "file": "routes/dashboard.guests.tsx",
+        "id": "routes/dashboard.guests",
+        "path": "dashboard/guests",
+        "parentId": "root"
+      },
+      "routes/dashboard._index": {
+        "file": "routes/dashboard._index.tsx",
+        "id": "routes/dashboard._index",
+        "path": "dashboard",
+        "index": true,
+        "parentId": "root"
+      },
+      "routes/dashboard.rooms": {
+        "file": "routes/dashboard.rooms.tsx",
+        "id": "routes/dashboard.rooms",
+        "path": "dashboard/rooms",
+        "parentId": "root"
+      },
+      "routes/dashboard.users": {
+        "file": "routes/dashboard.users.tsx",
+        "id": "routes/dashboard.users",
+        "path": "dashboard/users",
+        "parentId": "root"
+      },
+      "routes/api.settings": {
+        "file": "routes/api.settings.tsx",
+        "id": "routes/api.settings",
+        "path": "api/settings",
+        "parentId": "root"
+      },
+      "routes/register": {
+        "file": "routes/register.tsx",
+        "id": "routes/register",
+        "path": "register",
+        "parentId": "root"
+      },
+      "routes/health": {
+        "file": "routes/health.tsx",
+        "id": "routes/health",
+        "path": "health",
+        "parentId": "root"
+      },
+      "routes/logout": {
+        "file": "routes/logout.tsx",
+        "id": "routes/logout",
+        "path": "logout",
+        "parentId": "root"
+      },
+      "routes/_index": {
+        "file": "routes/_index.tsx",
+        "id": "routes/_index",
+        "index": true,
+        "parentId": "root"
+      },
+      "routes/login": {
+        "file": "routes/login.tsx",
+        "id": "routes/login",
+        "path": "login",
+        "parentId": "root"
+      }
+    },
+    "serverBuildFile": "index.js",
+    "serverModuleFormat": "esm",
+    "ssr": true
+  },
+  "viteConfig": {
+    "build": {
+      "assetsDir": "assets"
+    }
+  }
+}
