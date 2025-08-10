@@ -35,6 +35,7 @@
     "@remix-run/serve": "*",
     "@tabler/icons-react": "^3.34.1",
     "@types/pg": "^8.15.5",
+    "@vercel/remix": "^2.16.7",
     "bcryptjs": "^3.0.2",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
