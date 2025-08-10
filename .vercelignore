@@ -1,0 +1,13 @@
+.env.local
+.env.*.local
+node_modules
+npm-debug.log*
+.DS_Store
+*.tgz
+*.tar.gz
+.cache
+.next
+.nuxt
+dist
+.vercel
+.output

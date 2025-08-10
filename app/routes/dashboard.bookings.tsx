@@ -1089,7 +1089,7 @@ export default function Bookings() {
                   label="Check-in Date"
                   placeholder="Select date"
                   value={checkInDate}
-                  onChange={(date) => setCheckInDate(date)}
+                  onChange={(date: Date | null) => setCheckInDate(date)}
                   required
                   minDate={new Date()}
                   valueFormat="YYYY-MM-DD"
