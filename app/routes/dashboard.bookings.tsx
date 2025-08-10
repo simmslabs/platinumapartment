@@ -825,14 +825,15 @@ export default function Bookings() {
               )}
             </Group>
           </Group>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
-                  <Table.Th>Guest</Table.Th>
-                )}
-                <Table.Th>Room</Table.Th>
-                <Table.Th>Check-in</Table.Th>
+          <Table.ScrollContainer minWidth={800}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
+                    <Table.Th>Guest</Table.Th>
+                  )}
+                  <Table.Th>Room</Table.Th>
+                  <Table.Th>Check-in</Table.Th>
                 <Table.Th>Check-out</Table.Th>
                 <Table.Th>Guests</Table.Th>
                 <Table.Th>Total</Table.Th>
@@ -1041,6 +1042,7 @@ export default function Bookings() {
               )}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
         </Card>
 
         <Modal opened={opened} onClose={handleModalClose} title="Create New Booking" size="lg">

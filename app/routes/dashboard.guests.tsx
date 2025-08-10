@@ -470,14 +470,15 @@ export default function Guests() {
                 Showing {filteredGuests.length} of {guests.length} guests
               </Text>
             </Group>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Guest Information</Table.Th>
-                  <Table.Th>Contact</Table.Th>
-                  <Table.Th>Total Bookings</Table.Th>
-                  <Table.Th>Latest Booking</Table.Th>
-                  <Table.Th>Joined</Table.Th>
+            <Table.ScrollContainer minWidth={800}>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Guest Information</Table.Th>
+                    <Table.Th>Contact</Table.Th>
+                    <Table.Th>Total Bookings</Table.Th>
+                    <Table.Th>Latest Booking</Table.Th>
+                    <Table.Th>Joined</Table.Th>
                   {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
                     <Table.Th>Actions</Table.Th>
                   )}
@@ -606,6 +607,7 @@ export default function Guests() {
                 )}
               </Table.Tbody>
             </Table>
+            </Table.ScrollContainer>
           </Card>
 
           {/* Add Guest Modal */}

@@ -469,15 +469,16 @@ export default function GuestDetails() {
         <Card withBorder>
           <Text fw={600} mb="md">Recent Bookings</Text>
           {guest.bookings.length > 0 ? (
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Room</Table.Th>
-                  <Table.Th>Dates</Table.Th>
-                  <Table.Th>Amount</Table.Th>
-                  <Table.Th>Payment Status</Table.Th>
-                  <Table.Th>Booking Status</Table.Th>
-                  <Table.Th>Security Deposit</Table.Th>
+            <Table.ScrollContainer minWidth={800}>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Room</Table.Th>
+                    <Table.Th>Dates</Table.Th>
+                    <Table.Th>Amount</Table.Th>
+                    <Table.Th>Payment Status</Table.Th>
+                    <Table.Th>Booking Status</Table.Th>
+                    <Table.Th>Security Deposit</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -536,6 +537,7 @@ export default function GuestDetails() {
                 ))}
               </Table.Tbody>
             </Table>
+            </Table.ScrollContainer>
           ) : (
             <Alert icon={<IconInfoCircle size={16} />} color="blue">
               This guest has no bookings yet.

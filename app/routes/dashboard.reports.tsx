@@ -815,14 +815,15 @@ export default function Reports() {
                 </Text>
               </Group>
 
-              <Table striped highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Guest</Table.Th>
-                    <Table.Th>Bookings</Table.Th>
-                    <Table.Th>Total Paid</Table.Th>
-                    <Table.Th>Security Deposits</Table.Th>
-                    <Table.Th>Refunds</Table.Th>
+              <Table.ScrollContainer minWidth={800}>
+                <Table striped highlightOnHover>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Guest</Table.Th>
+                      <Table.Th>Bookings</Table.Th>
+                      <Table.Th>Total Paid</Table.Th>
+                      <Table.Th>Security Deposits</Table.Th>
+                      <Table.Th>Refunds</Table.Th>
                     <Table.Th>Outstanding</Table.Th>
                     <Table.Th>Status</Table.Th>
                   </Table.Tr>
@@ -877,6 +878,7 @@ export default function Reports() {
                   ))}
                 </Table.Tbody>
               </Table>
+              </Table.ScrollContainer>
 
               {guestBalances.length === 0 && (
                 <Stack align="center" py="xl">
@@ -892,15 +894,16 @@ export default function Reports() {
           <Tabs.Panel value="trends" pt="xl">
             <Card>
               <Title order={3} mb="md">Historical {trendLabel === "month" ? "Monthly" : trendLabel === "quarter" ? "Quarterly" : trendLabel === "year" ? "Annual" : trendLabel === "week" ? "Weekly" : "Daily"} Trends</Title>
-              <Table striped>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Period</Table.Th>
-                    <Table.Th>Revenue</Table.Th>
-                    <Table.Th>Payments</Table.Th>
-                    <Table.Th>Security Deposits</Table.Th>
-                    <Table.Th>Bookings</Table.Th>
-                    <Table.Th>Trend</Table.Th>
+              <Table.ScrollContainer minWidth={800}>
+                <Table striped>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Period</Table.Th>
+                      <Table.Th>Revenue</Table.Th>
+                      <Table.Th>Payments</Table.Th>
+                      <Table.Th>Security Deposits</Table.Th>
+                      <Table.Th>Bookings</Table.Th>
+                      <Table.Th>Trend</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -948,6 +951,7 @@ export default function Reports() {
                   })}
                 </Table.Tbody>
               </Table>
+              </Table.ScrollContainer>
             </Card>
           </Tabs.Panel>
         </Tabs>

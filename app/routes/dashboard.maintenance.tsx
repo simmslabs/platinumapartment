@@ -207,12 +207,13 @@ export default function Maintenance() {
         )}
 
         <Card>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Room</Table.Th>
-                <Table.Th>Type</Table.Th>
-                <Table.Th>Description</Table.Th>
+          <Table.ScrollContainer minWidth={800}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Room</Table.Th>
+                  <Table.Th>Type</Table.Th>
+                  <Table.Th>Description</Table.Th>
                 <Table.Th>Priority</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Reported</Table.Th>
@@ -304,6 +305,7 @@ export default function Maintenance() {
               ))}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
         </Card>
 
         <Modal opened={opened} onClose={close} title="Create Maintenance Task" size="lg">

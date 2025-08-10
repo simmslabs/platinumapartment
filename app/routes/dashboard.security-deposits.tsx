@@ -490,14 +490,15 @@ export default function SecurityDeposits() {
         </Card>
 
         <Card>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Guest</Table.Th>
-                <Table.Th>Room</Table.Th>
-                <Table.Th>Amount</Table.Th>
-                <Table.Th>Method</Table.Th>
-                <Table.Th>Status</Table.Th>
+          <Table.ScrollContainer minWidth={800}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Guest</Table.Th>
+                  <Table.Th>Room</Table.Th>
+                  <Table.Th>Amount</Table.Th>
+                  <Table.Th>Method</Table.Th>
+                  <Table.Th>Status</Table.Th>
                 <Table.Th>Paid Date</Table.Th>
                 <Table.Th>Refund Info</Table.Th>
                 <Table.Th>Actions</Table.Th>
@@ -581,6 +582,7 @@ export default function SecurityDeposits() {
               ))}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
 
           {securityDeposits.length === 0 && (
             <Stack align="center" py="xl">

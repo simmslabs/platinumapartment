@@ -542,12 +542,13 @@ export default function Payments() {
         </Card>
 
         <Card>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Guest</Table.Th>
-                <Table.Th>Room</Table.Th>
-                <Table.Th>Amount</Table.Th>
+          <Table.ScrollContainer minWidth={800}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Guest</Table.Th>
+                  <Table.Th>Room</Table.Th>
+                  <Table.Th>Amount</Table.Th>
                 <Table.Th>Method</Table.Th>
                 <Table.Th>Payment Account</Table.Th>
                 <Table.Th>Status</Table.Th>
@@ -658,6 +659,7 @@ export default function Payments() {
               ))}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
 
           {payments.length === 0 && (
             <Stack align="center" py="xl">

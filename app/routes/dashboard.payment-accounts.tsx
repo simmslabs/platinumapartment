@@ -262,12 +262,13 @@ export default function PaymentAccounts() {
         )}
 
         <Card withBorder>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Name</Table.Th>
-                <Table.Th>Type</Table.Th>
-                <Table.Th>Provider</Table.Th>
+          <Table.ScrollContainer minWidth={800}>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Name</Table.Th>
+                  <Table.Th>Type</Table.Th>
+                  <Table.Th>Provider</Table.Th>
                 <Table.Th>Account Number</Table.Th>
                 <Table.Th>Bank Name</Table.Th>
                 <Table.Th>Status</Table.Th>
@@ -355,6 +356,7 @@ export default function PaymentAccounts() {
               )}
             </Table.Tbody>
           </Table>
+          </Table.ScrollContainer>
         </Card>
 
         <Modal 

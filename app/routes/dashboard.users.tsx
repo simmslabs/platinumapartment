@@ -468,11 +468,12 @@ export default function UsersManagement() {
               </Center>
             ) : (
               <>
-                <Table striped highlightOnHover>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>User</Table.Th>
-                      <Table.Th>Role</Table.Th>
+                <Table.ScrollContainer minWidth={800}>
+                  <Table striped highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>User</Table.Th>
+                        <Table.Th>Role</Table.Th>
                       <Table.Th>Contact</Table.Th>
                       <Table.Th>Bookings</Table.Th>
                       <Table.Th>Created</Table.Th>
@@ -564,6 +565,7 @@ export default function UsersManagement() {
                     ))}
                   </Table.Tbody>
                 </Table>
+                </Table.ScrollContainer>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
