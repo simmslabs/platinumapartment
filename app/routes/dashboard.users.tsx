@@ -63,6 +63,17 @@ type UserWithBookings = User & {
   };
 };
 
+type SerializedUserWithBookings = Omit<UserWithBookings, 'createdAt' | 'updatedAt' | 'bookings'> & {
+  createdAt: string;
+  updatedAt: string;
+  bookings: (Omit<Booking, 'createdAt' | 'updatedAt' | 'checkIn' | 'checkOut'> & {
+    createdAt: string;
+    updatedAt: string;
+    checkIn: string;
+    checkOut: string;
+  })[];
+};
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const currentUserId = await requireUserId(request);
   const currentUser = await getUser(request);
@@ -130,7 +141,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     search, 
     roleFilter: role,
     roleStats,
-    currentUserId 
+    currentUserId,
+    user: currentUser
   });
 }
 
@@ -268,7 +280,7 @@ export async function action({ request }: ActionFunctionArgs) {
         include: { _count: { select: { bookings: true } } }
       });
 
-      if (userWithBookings?._count.bookings > 0) {
+      if (userWithBookings && userWithBookings._count.bookings > 0) {
         return json({ success: false, errors: ["Cannot delete user with existing bookings"] }, { status: 400 });
       }
 
@@ -302,7 +314,8 @@ export default function UsersManagement() {
     search, 
     roleFilter, 
     roleStats,
-    currentUserId 
+    currentUserId,
+    user
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -313,33 +326,33 @@ export default function UsersManagement() {
   const [resetPasswordOpened, { open: openResetPassword, close: closeResetPassword }] = useDisclosure(false);
   const [viewOpened, { open: openView, close: closeView }] = useDisclosure(false);
   
-  const [selectedUser, setSelectedUser] = useState<UserWithBookings | null>(null);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   const [searchInput, setSearchInput] = useState(search);
 
   const isSubmitting = navigation.state === "submitting";
 
-  const handleEdit = (user: UserWithBookings) => {
+  const handleEdit = (user: any) => {
     setSelectedUser(user);
     openEdit();
   };
 
-  const handleDelete = (user: UserWithBookings) => {
+  const handleDelete = (user: any) => {
     setSelectedUser(user);
     openDelete();
   };
 
-  const handleResetPassword = (user: UserWithBookings) => {
+  const handleResetPassword = (user: any) => {
     setSelectedUser(user);
     openResetPassword();
   };
 
-  const handleView = (user: UserWithBookings) => {
+  const handleView = (user: any) => {
     setSelectedUser(user);
     openView();
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout user={user}>
       <Stack gap="xl">
         {/* Header */}
         <Group>
@@ -360,7 +373,7 @@ export default function UsersManagement() {
         </Group>
 
         {/* Action Feedback */}
-        {actionData?.success && (
+        {actionData?.success && actionData && 'message' in actionData && (
           <Alert
             icon={<IconCheck size={16} />}
             title="Success"
@@ -371,7 +384,7 @@ export default function UsersManagement() {
           </Alert>
         )}
 
-        {actionData?.errors && (
+        {actionData && 'errors' in actionData && actionData.errors && (
           <Alert
             icon={<IconX size={16} />}
             title="Error"
@@ -379,7 +392,7 @@ export default function UsersManagement() {
             variant="light"
           >
             <ul>
-              {actionData.errors.map((error, index) => (
+              {actionData.errors.map((error: string, index: number) => (
                 <li key={index}>{error}</li>
               ))}
             </ul>
@@ -867,7 +880,7 @@ export default function UsersManagement() {
                       </Text>
                       {selectedUser.bookings.length > 0 ? (
                         <Stack gap="xs">
-                          {selectedUser.bookings.map((booking) => (
+                          {selectedUser.bookings.map((booking: any) => (
                             <div key={booking.id} style={{ padding: "8px", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
                               <Text size="sm" fw={500}>
                                 {format(new Date(booking.checkIn), "MMM dd")} - {format(new Date(booking.checkOut), "MMM dd, yyyy")}
