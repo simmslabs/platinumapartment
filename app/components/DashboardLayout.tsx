@@ -81,7 +81,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
         <Group h="100%" px="md" justify="space-between">
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Text size="xl" w={{ span: 150, xs: 150, md: "100%" }} fw={700} truncate c="blue">
+            <Text size="xl" w={{ base: 150, xs: 150, md: "100%" }} fw={700} truncate c="blue">
               🏨 Platinum Apartment Management
             </Text>
           </Group>
