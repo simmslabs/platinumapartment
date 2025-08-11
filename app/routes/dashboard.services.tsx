@@ -78,7 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
           description,
           price,
           category,
-          isActive,
+          available: isActive,
         },
       });
 
@@ -104,7 +104,7 @@ export async function action({ request }: ActionFunctionArgs) {
           description,
           price,
           category,
-          isActive,
+          available: isActive,
         },
       });
 
@@ -123,12 +123,12 @@ export async function action({ request }: ActionFunctionArgs) {
         where: { id },
         include: {
           _count: {
-            select: { serviceBookings: true }
+            select: { bookingServices: true }
           }
         }
       });
 
-      if (serviceWithBookings && serviceWithBookings._count.serviceBookings > 0) {
+      if (serviceWithBookings && serviceWithBookings._count.bookingServices > 0) {
         return json({ error: "Cannot delete service with existing bookings" }, { status: 400 });
       }
 
@@ -150,20 +150,22 @@ export default function Services() {
   const { user, services } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [opened, { open, close }] = useDisclosure(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editingService, setEditingService] = useState<any>(null);
 
   const getCategoryColor = (category: ServiceCategory) => {
     switch (category) {
       case "LAUNDRY":
         return "blue";
-      case "FOOD":
+      case "FOOD_BEVERAGE":
         return "green";
       case "TRANSPORT":
         return "orange";
       case "SPA":
         return "purple";
-      case "CLEANING":
+      case "ENTERTAINMENT":
         return "cyan";
+      case "BUSINESS":
+        return "indigo";
       case "OTHER":
         return "gray";
       default:
@@ -175,14 +177,16 @@ export default function Services() {
     switch (category) {
       case "LAUNDRY":
         return "Laundry";
-      case "FOOD":
-        return "Food & Dining";
+      case "FOOD_BEVERAGE":
+        return "Food & Beverage";
       case "TRANSPORT":
         return "Transportation";
       case "SPA":
         return "Spa & Wellness";
-      case "CLEANING":
-        return "Cleaning";
+      case "ENTERTAINMENT":
+        return "Entertainment";
+      case "BUSINESS":
+        return "Business Services";
       case "OTHER":
         return "Other";
       default:
@@ -190,7 +194,7 @@ export default function Services() {
     }
   };
 
-  const handleEdit = (service: Service) => {
+  const handleEdit = (service: any) => {
     setEditingService(service);
     open();
   };
@@ -226,7 +230,7 @@ export default function Services() {
           )}
         </Group>
 
-        {actionData?.error && (
+        {actionData && 'error' in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Error"
@@ -237,7 +241,7 @@ export default function Services() {
           </Alert>
         )}
 
-        {actionData?.success && (
+        {actionData && 'success' in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Success"
@@ -281,8 +285,8 @@ export default function Services() {
                       <Text fw={500}>₵{service.price.toFixed(2)}</Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={service.isActive ? "green" : "red"} size="sm">
-                        {service.isActive ? "Active" : "Inactive"}
+                      <Badge color={service.available ? "green" : "red"} size="sm">
+                        {service.available ? "Available" : "Unavailable"}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
@@ -369,10 +373,11 @@ export default function Services() {
                 defaultValue={editingService?.category || ""}
                 data={[
                   { value: "LAUNDRY", label: "Laundry" },
-                  { value: "FOOD", label: "Food & Dining" },
+                  { value: "FOOD_BEVERAGE", label: "Food & Beverage" },
                   { value: "TRANSPORT", label: "Transportation" },
                   { value: "SPA", label: "Spa & Wellness" },
-                  { value: "CLEANING", label: "Cleaning" },
+                  { value: "ENTERTAINMENT", label: "Entertainment" },
+                  { value: "BUSINESS", label: "Business Services" },
                   { value: "OTHER", label: "Other" },
                 ]}
                 required
@@ -390,9 +395,9 @@ export default function Services() {
               />
 
               <Switch
-                label="Active Service"
+                label="Available Service"
                 name="isActive"
-                defaultChecked={editingService?.isActive ?? true}
+                defaultChecked={editingService?.available ?? true}
               />
 
               <Group justify="flex-end">
