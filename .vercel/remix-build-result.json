@@ -20,6 +20,7 @@
       "routes/api.reports.export": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.bookings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.payments": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.services": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.settings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.guests.import": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.reports": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
@@ -28,6 +29,7 @@
       "routes/dashboard.rooms": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.users": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.settings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/register": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/health": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/logout": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
@@ -131,6 +133,15 @@
           "runtime": "nodejs"
         }
       },
+      "routes/dashboard.services": {
+        "file": "app/routes/dashboard.services.tsx",
+        "id": "routes/dashboard.services",
+        "path": "dashboard/services",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
       "routes/dashboard.settings": {
         "file": "app/routes/dashboard.settings.tsx",
         "id": "routes/dashboard.settings",
@@ -199,6 +210,15 @@
         "file": "app/routes/api.settings.tsx",
         "id": "routes/api.settings",
         "path": "api/settings",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.test": {
+        "file": "app/routes/api.test.ts",
+        "id": "routes/api.test",
+        "path": "api/test",
         "parentId": "root",
         "config": {
           "runtime": "nodejs"
@@ -332,6 +352,12 @@
         "path": "dashboard/payments",
         "parentId": "root"
       },
+      "routes/dashboard.services": {
+        "file": "routes/dashboard.services.tsx",
+        "id": "routes/dashboard.services",
+        "path": "dashboard/services",
+        "parentId": "root"
+      },
       "routes/dashboard.settings": {
         "file": "routes/dashboard.settings.tsx",
         "id": "routes/dashboard.settings",
@@ -379,6 +405,12 @@
         "file": "routes/api.settings.tsx",
         "id": "routes/api.settings",
         "path": "api/settings",
+        "parentId": "root"
+      },
+      "routes/api.test": {
+        "file": "routes/api.test.ts",
+        "id": "routes/api.test",
+        "path": "api/test",
         "parentId": "root"
       },
       "routes/register": {

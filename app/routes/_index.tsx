@@ -11,8 +11,8 @@ import {
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Platinum Apartment - Premium Accommodation" },
-    { name: "description", content: "Experience luxury and comfort at our premium apartment complex." },
+    { title: "Platinum Apartment - Management System" },
+    { name: "description", content: "Unauthorized access is prohibited." },
   ];
 };
 

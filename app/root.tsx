@@ -46,6 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             primaryColor: "blue",
             fontFamily: "Inter, sans-serif",
           }}
+          defaultColorScheme="auto"
         >
           <ModalsProvider>
             <Notifications />
