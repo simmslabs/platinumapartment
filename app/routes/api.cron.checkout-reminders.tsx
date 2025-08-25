@@ -128,25 +128,34 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    // Notify staff/admin users about the checkout reminders sent
+    // Notify ALL users about the checkout reminders sent
     if (notifications.length > 0) {
-      const staffUsers = await db.user.findMany({
-        where: {
-          role: {
-            in: ["ADMIN", "MANAGER", "STAFF"]
-          }
+      // Get all users in the system
+      const allUsers = await db.user.findMany({
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          phone: true
         }
       });
 
-      const staffNotificationMessage = `Checkout reminder notifications sent to ${notifications.length} guest${notifications.length !== 1 ? 's' : ''}:\n\n${notifications.map(n => `• ${n.guest} - Room ${n.room} (${n.daysRemaining} day${n.daysRemaining !== 1 ? 's' : ''} remaining)`).join('\n')}`;
+      const generalNotificationMessage = `Daily checkout reminders have been sent to ${notifications.length} guest${notifications.length !== 1 ? 's' : ''} who are nearing their checkout time (75%+ stay completed).`;
+      
+      const detailedNotificationMessage = `Checkout reminder notifications sent to ${notifications.length} guest${notifications.length !== 1 ? 's' : ''}:\n\n${notifications.map(n => `• ${n.guest} - Room ${n.room} (${n.daysRemaining} day${n.daysRemaining !== 1 ? 's' : ''} remaining)`).join('\n')}`;
 
-      // Create notifications for staff
-      for (const staff of staffUsers) {
+      // Create notifications for ALL users
+      for (const user of allUsers) {
+        // Staff and admins get detailed notifications
+        const isStaffOrAdmin = ['ADMIN', 'MANAGER', 'STAFF'].includes(user.role);
+        
         await db.notification.create({
           data: {
-            userId: staff.id,
+            userId: user.id,
             title: "Daily Checkout Reminders Sent",
-            message: staffNotificationMessage,
+            message: isStaffOrAdmin ? detailedNotificationMessage : generalNotificationMessage,
             type: "GENERAL_ANNOUNCEMENT",
             channel: "EMAIL",
             status: "SENT",
@@ -155,7 +164,24 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      // Send email summary to staff (optional)
+      // Send SMS alerts to all users with phone numbers about the system activity
+      const smsNotificationMessage = `Platinum Apartment Alert: Daily checkout reminders sent to ${notifications.length} guest${notifications.length !== 1 ? 's' : ''} nearing checkout. System running normally.`;
+      
+      for (const user of allUsers) {
+        if (user.phone) {
+          try {
+            await mnotifyService.sendSMS({
+              recipient: user.phone,
+              message: smsNotificationMessage
+            });
+            console.log(`✅ System alert SMS sent to ${user.firstName} ${user.lastName}`);
+          } catch (error) {
+            console.error(`❌ Failed to send system alert SMS to ${user.firstName} ${user.lastName}:`, error);
+          }
+        }
+      }
+
+      // Send email summary to ALL users
       try {
         const emailSubject = `Daily Checkout Reminders - ${format(now, 'MMM dd, yyyy')}`;
         const emailContent = `
@@ -200,21 +226,24 @@ export async function action({ request }: ActionFunctionArgs) {
             <li>Failed SMS: ${smsResults.filter(s => !s.success).length}</li>
             <li>No phone number: ${notifications.filter(n => n.phoneNumber === 'No phone number').length}</li>
           </ul>
+          
+          <p><em>This is an automated notification from the Platinum Apartment Management System.</em></p>
         `;
 
-        for (const staff of staffUsers) {
+        for (const user of allUsers) {
           try {
             await emailService.sendCustomEmail({
-              to: staff.email,
+              to: user.email,
               subject: emailSubject,
               html: emailContent
             });
+            console.log(`✅ System summary email sent to ${user.firstName} ${user.lastName}`);
           } catch (emailError) {
-            console.error(`Failed to send notification email to ${staff.email}:`, emailError);
+            console.error(`❌ Failed to send notification email to ${user.email}:`, emailError);
           }
         }
       } catch (error) {
-        console.error('Failed to send staff notification emails:', error);
+        console.error('Failed to send user notification emails:', error);
       }
     }
 
@@ -226,6 +255,7 @@ export async function action({ request }: ActionFunctionArgs) {
         notificationsSent: notifications.length,
         smsSuccessful: smsResults.filter(s => s.success).length,
         smsFailed: smsResults.filter(s => !s.success).length,
+        allUsersNotified: true,
         timestamp: now.toISOString()
       },
       notifications,

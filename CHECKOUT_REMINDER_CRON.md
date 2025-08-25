@@ -209,9 +209,15 @@ Create `vercel.json`:
 
 ## Testing
 
+### Test the checkout cron job:
+```bash
+# Test the complete checkout reminder system
+bun run scripts/test-checkout-cron.ts
+```
+
 ### Test the endpoint manually:
 ```bash
-curl -X POST "http://localhost:3000/api/cron/checkout-reminders?key=your-secret-cron-key-here"
+curl -X POST "http://localhost:8081/api/cron/checkout-reminders?key=your-secret-cron-key-here"
 ```
 
 ### Expected Response:
@@ -224,6 +230,7 @@ curl -X POST "http://localhost:3000/api/cron/checkout-reminders?key=your-secret-
     "notificationsSent": 2,
     "smsSuccessful": 1,
     "smsFailed": 1,
+    "allUsersNotified": true,
     "timestamp": "2025-08-25T10:00:00.000Z"
   },
   "notifications": [...],
@@ -231,15 +238,22 @@ curl -X POST "http://localhost:3000/api/cron/checkout-reminders?key=your-secret-
 }
 ```
 
+The `allUsersNotified: true` field confirms that all users in the system have been notified about the checkout reminder activity.
+
 ## What Happens When the Cron Runs
 
 1. **Finds Active Bookings**: Looks for guests currently checked in or confirmed
 2. **Calculates Completion**: Determines what percentage of their stay is complete
 3. **Identifies 75%+ Guests**: Finds guests who have completed 75% or more of their stay
-4. **Sends SMS**: Sends SMS to guests with phone numbers
-5. **Creates Notifications**: Logs notifications in the database
-6. **Notifies Staff**: Sends summary email and in-app notifications to staff
-7. **Returns Summary**: Provides detailed results of the operation
+4. **Sends SMS to Guests**: Sends checkout reminder SMS to qualifying guests with phone numbers
+5. **Creates Guest Notifications**: Logs notifications in the database for the guests
+6. **Alerts ALL Users**: Sends notifications, emails, and SMS alerts to ALL users in the system:
+   - **Staff/Admin Users**: Receive detailed notifications with guest lists and statistics
+   - **Regular Users**: Receive general system status notifications
+   - **In-App Notifications**: Created for all users about the daily checkout reminder activity
+   - **Email Summaries**: Sent to all users with detailed checkout reminder reports
+   - **SMS System Alerts**: Sent to all users with phone numbers about system activity
+7. **Returns Summary**: Provides detailed results of the operation including user notification status
 
 ## Monitoring
 
