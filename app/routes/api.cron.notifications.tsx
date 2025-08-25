@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { db } from "~/utils/db.server";
 import { emailService } from "~/utils/email.server";
 import { mnotifyService } from "~/utils/mnotify.server";
-import { format, isAfter, isBefore } from "date-fns";
+import { format, isAfter } from "date-fns";
 
 type BookingWithRelations = {
   id: string;
@@ -77,21 +77,35 @@ export async function action({ request }: ActionFunctionArgs) {
         const seventyFivePercentDuration = totalStayDuration * 0.75;
         const seventyFivePercentDate = new Date(checkInDate.getTime() + seventyFivePercentDuration);
 
-        // Check if today is the 75% completion date (within a 2-hour window)
-        const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        // Check if we've passed the 75% completion date
+        const hasPassedSeventyFivePercent = isAfter(now, seventyFivePercentDate);
 
-        if (
-          isAfter(seventyFivePercentDate, twoHoursAgo) &&
-          isBefore(seventyFivePercentDate, twoHoursFromNow)
-        ) {
-          // Check if we've already sent notifications for this booking today
+        if (hasPassedSeventyFivePercent) {
+          // Determine which notification slot this is (morning: 9 AM, evening: 6 PM)
+          const currentHour = now.getHours();
+          let notificationSlot = "";
+          
+          if (currentHour >= 8 && currentHour <= 11) {
+            notificationSlot = "MORNING"; // 9 AM slot (8-11 AM window)
+          } else if (currentHour >= 17 && currentHour <= 20) {
+            notificationSlot = "EVENING"; // 6 PM slot (5-8 PM window)
+          } else {
+            // Skip if not in notification time windows
+            continue;
+          }
+
+          // Check if we've already sent this type of notification today
+          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+          
           const existingNotification = await db.notification.findFirst({
             where: {
               bookingId: booking.id,
               type: "SEVENTY_FIVE_PERCENT_STAY",
+              message: { contains: notificationSlot }, // Check if this slot's notification was sent
               createdAt: {
-                gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()), // Today
+                gte: todayStart,
+                lte: todayEnd,
               },
             },
           });
@@ -102,14 +116,15 @@ export async function action({ request }: ActionFunctionArgs) {
             const roomNumber = booking.room.number;
             const checkOutDateFormatted = format(checkOutDate, "MMMM dd, yyyy 'at' hh:mm a");
             const remainingDays = Math.ceil((checkOutDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            const timeOfDay = notificationSlot === "MORNING" ? "morning" : "evening";
 
-            const emailSubject = "Your Stay is Almost Complete - Platinum Apartment";
+            const emailSubject = `${notificationSlot === "MORNING" ? "Good Morning" : "Good Evening"} - Your Stay Update - Platinum Apartment`;
             const emailContent = `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #2563eb;">🏨 Your Stay Progress</h2>
+                <h2 style="color: #2563eb;">🏨 ${timeOfDay === "morning" ? "Good Morning" : "Good Evening"} - Your Stay Progress</h2>
                 <p>Dear ${guestName},</p>
                 
-                <p>We hope you're enjoying your stay at Platinum Apartment! We wanted to remind you that you've completed 75% of your reservation.</p>
+                <p>We hope you're having a wonderful ${timeOfDay} at Platinum Apartment! This is your daily reminder that you've completed 75% of your reservation.</p>
                 
                 <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                   <h3 style="margin-top: 0;">Booking Details:</h3>
@@ -137,7 +152,7 @@ export async function action({ request }: ActionFunctionArgs) {
               </div>
             `;
 
-            const smsContent = `Hi ${booking.user.firstName}! You've completed 75% of your stay at Platinum Apartment (Room ${roomNumber}). Check-out is on ${checkOutDateFormatted}. Thank you for staying with us! - Platinum Apartment`;
+            const smsContent = `${timeOfDay === "morning" ? "Good morning" : "Good evening"} ${booking.user.firstName}! Daily reminder: You've completed 75% of your stay at Platinum Apartment (Room ${roomNumber}). Check-out: ${checkOutDateFormatted}. - Platinum Apartment`;
 
             // Send email notification
             if (booking.user.email) {
@@ -183,7 +198,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 userId: booking.userId,
                 type: "SEVENTY_FIVE_PERCENT_STAY",
                 title: "75% Stay Completion Notice",
-                message: `Stay completion notification sent for Room ${roomNumber}`,
+                message: `${notificationSlot} - Stay completion notification sent for Room ${roomNumber}`,
                 channel: booking.user.phone ? "EMAIL_SMS" : "EMAIL",
                 status: "SENT",
               },
@@ -225,9 +240,12 @@ export async function action({ request }: ActionFunctionArgs) {
           .map(guest => `${guest.name} (Room ${guest.room})`)
           .join(", ");
 
+        const currentHour = now.getHours();
+        const timeSlot = (currentHour >= 8 && currentHour <= 11) ? "morning" : "evening";
+
         const summaryMessage = results.notifiedGuests.length > 0 
-          ? `🏨 Platinum Apartment Alert: ${results.notifiedGuests.length} guest(s) received 75% stay completion notifications. Guests notified: ${notifiedGuestsList}. Sent: ${results.emailsSent} emails, ${results.smsSent} SMS.`
-          : `🏨 Platinum Apartment: No guests required 75% stay completion notifications at this time.`;
+          ? `🏨 Platinum Apartment ${timeSlot.toUpperCase()} Alert: ${results.notifiedGuests.length} guest(s) received daily 75% stay completion notifications. Guests notified: ${notifiedGuestsList}. Sent: ${results.emailsSent} emails, ${results.smsSent} SMS.`
+          : `🏨 Platinum Apartment: No guests required daily ${timeSlot} notifications at this time.`;
 
         // Send SMS to all staff members
         for (const staff of staffUsers) {
