@@ -42,7 +42,7 @@ class MNotifyService {
     this.config = {
       apiKey: process.env.MNOTIFY_API_KEY || '',
       senderId: process.env.MNOTIFY_SENDER_ID || 'ApartmentMgmt',
-      baseUrl: 'https://api.mnotify.net/api/sms/quick',
+      baseUrl: 'https://api.mnotify.com/api/sms/quick',
     };
 
     if (!this.config.apiKey) {
