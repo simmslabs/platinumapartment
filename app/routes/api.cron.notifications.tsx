@@ -2,8 +2,28 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { db } from "~/utils/db.server";
 import { emailService } from "~/utils/email.server";
-import { sendSMS } from "~/utils/sms.server";
-import { format, addDays, isAfter, isBefore } from "date-fns";
+import { mnotifyService } from "~/utils/mnotify.server";
+import { format, isAfter, isBefore } from "date-fns";
+
+type BookingWithRelations = {
+  id: string;
+  status: string;
+  userId: string;
+  roomId: string;
+  checkIn: Date;
+  checkOut: Date;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+  room: {
+    id: string;
+    number: string;
+  };
+};
 
 export async function action({ request }: ActionFunctionArgs) {
   // Verify this is a POST request
@@ -25,7 +45,8 @@ export async function action({ request }: ActionFunctionArgs) {
       processed: 0,
       emailsSent: 0,
       smsSent: 0,
-      errors: [],
+      staffNotified: 0,
+      errors: [] as string[],
     };
 
     // Find bookings that are currently active (checked in) and at 75% completion
@@ -41,13 +62,9 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       include: {
         user: true,
-        room: {
-          include: {
-            block: true,
-          },
-        },
+        room: true,
       },
-    });
+    }) as BookingWithRelations[];
 
     for (const booking of activeBookings) {
       try {
@@ -81,7 +98,7 @@ export async function action({ request }: ActionFunctionArgs) {
           if (!existingNotification) {
             // Prepare notification content
             const guestName = `${booking.user.firstName} ${booking.user.lastName}`;
-            const roomNumber = `${booking.room.block.name}-${booking.room.number}`;
+            const roomNumber = booking.room.number;
             const checkOutDateFormatted = format(checkOutDate, "MMMM dd, yyyy 'at' hh:mm a");
             const remainingDays = Math.ceil((checkOutDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -140,11 +157,17 @@ export async function action({ request }: ActionFunctionArgs) {
             // Send SMS notification
             if (booking.user.phone) {
               try {
-                await sendSMS({
-                  to: booking.user.phone,
+                const result = await mnotifyService.sendSMS({
+                  recipient: booking.user.phone,
                   message: smsContent,
                 });
-                results.smsSent++;
+                
+                if (result.status === "success" || result.code === "2000") {
+                  results.smsSent++;
+                } else {
+                  console.error(`MNotify SMS failed for ${booking.user.phone}:`, result);
+                  results.errors.push(`SMS failed for booking ${booking.id}: ${result.message}`);
+                }
               } catch (smsError) {
                 console.error(`Failed to send SMS to ${booking.user.phone}:`, smsError);
                 const errorMessage = smsError instanceof Error ? smsError.message : String(smsError);
@@ -170,6 +193,72 @@ export async function action({ request }: ActionFunctionArgs) {
         console.error(`Error processing booking ${booking.id}:`, bookingError);
         const errorMessage = bookingError instanceof Error ? bookingError.message : String(bookingError);
         results.errors.push(`Booking ${booking.id}: ${errorMessage}`);
+      }
+    }
+
+    // Send summary notifications to all staff users
+    if (results.processed > 0) {
+      try {
+        // Get all staff users (admins, managers, staff)
+        const staffUsers = await db.user.findMany({
+          where: {
+            role: { in: ["ADMIN", "MANAGER", "STAFF"] },
+            phone: { not: null },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            role: true,
+          },
+        });
+
+        // Create a list of guests who reached 75% completion
+        const guestSummary = activeBookings
+          .filter(booking => {
+            const checkInDate = new Date(booking.checkIn);
+            const checkOutDate = new Date(booking.checkOut);
+            const totalStayDuration = checkOutDate.getTime() - checkInDate.getTime();
+            const seventyFivePercentDuration = totalStayDuration * 0.75;
+            const seventyFivePercentDate = new Date(checkInDate.getTime() + seventyFivePercentDuration);
+            const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+            const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+            
+            return isAfter(seventyFivePercentDate, twoHoursAgo) && isBefore(seventyFivePercentDate, twoHoursFromNow);
+          })
+          .map(booking => `${booking.user.firstName} ${booking.user.lastName} (Room ${booking.room.number})`)
+          .join(", ");
+
+        const summaryMessage = `🏨 Platinum Apartment Alert: ${results.processed} guest(s) reached 75% stay completion. Guests: ${guestSummary}. Notifications sent: ${results.emailsSent} emails, ${results.smsSent} SMS.`;
+
+        // Send SMS to all staff members
+        for (const staff of staffUsers) {
+          if (staff.phone) {
+            try {
+              const result = await mnotifyService.sendSMS({
+                recipient: staff.phone,
+                message: `Hi ${staff.firstName}, ${summaryMessage}`,
+              });
+
+              if (result.status === "success" || result.code === "2000") {
+                results.smsSent++;
+                results.staffNotified++;
+              } else {
+                console.error(`Staff SMS failed for ${staff.phone}:`, result);
+                results.errors.push(`Staff SMS failed for ${staff.firstName}: ${result.message}`);
+              }
+            } catch (staffSmsError) {
+              console.error(`Failed to send staff SMS to ${staff.phone}:`, staffSmsError);
+              const errorMessage = staffSmsError instanceof Error ? staffSmsError.message : String(staffSmsError);
+              results.errors.push(`Staff SMS failed for ${staff.firstName}: ${errorMessage}`);
+            }
+          }
+        }
+      } catch (staffError) {
+        console.error("Error sending staff notifications:", staffError);
+        const errorMessage = staffError instanceof Error ? staffError.message : String(staffError);
+        results.errors.push(`Staff notifications error: ${errorMessage}`);
       }
     }
 
