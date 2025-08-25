@@ -2,35 +2,26 @@ import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "@remi
 import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form } from "@remix-run/react";
 import {
-  Title,
   Badge,
   Button,
   Stack,
   Group,
   Alert,
   Text,
-  Card,
-  Progress,
-  ThemeIcon,
-  Grid,
-  Center,
   Modal,
   Textarea,
   Select,
-  ActionIcon,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { 
+import {
   IconClock, 
   IconAlertTriangle, 
   IconCalendarTime,
   IconUser,
   IconBed,
   IconInfoCircle,
-  IconClockHour2,
   IconMessage,
   IconPhone,
-  IconMessageCircle,
   IconBrandWhatsapp,
 } from "@tabler/icons-react";
 import { format, differenceInHours, differenceInMinutes, isToday, isTomorrow } from "date-fns";
@@ -38,7 +29,6 @@ import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import { mnotifyService } from "~/utils/mnotify.server";
-import type { Booking, Room, User } from "@prisma/client";
 import { useEffect, useState } from "react";
 
 export const meta: MetaFunction = () => {
@@ -48,17 +38,11 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-type BookingWithDetails = Booking & {
-  user: Pick<User, "firstName" | "lastName" | "email" | "phone">;
-  room: Pick<Room, "number" | "type">;
-};
-
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
 
   const now = new Date();
-  const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const next2Months = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000); // 60 days
 
   // Get bookings with upcoming checkouts (include both confirmed and checked-in)
@@ -182,6 +166,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (result.status === "success" || result.code === "2000") {
         return json({ success: "Notification sent successfully" });
       } else {
+        console.log("MNotify API Error:", result);
         return json({ error: `Failed to send notification: ${result.message}` }, { status: 400 });
       }
     }
@@ -213,7 +198,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Notification action error:", error);
     return json({ error: "Failed to send notification. Please try again." }, { status: 500 });
   }
@@ -224,7 +209,10 @@ export default function Monitoring() {
   const actionData = useActionData<typeof action>();
   const [currentDateTime, setCurrentDateTime] = useState(new Date(currentTime));
   const [smsModalOpened, { open: openSmsModal, close: closeSmsModal }] = useDisclosure(false);
-  const [selectedGuest, setSelectedGuest] = useState<any>(null);
+  const [selectedGuest, setSelectedGuest] = useState<{
+    booking?: typeof upcomingCheckouts[0];
+    messageType?: string;
+  } | null>(null);
 
   // Update time every minute
   useEffect(() => {
@@ -301,7 +289,7 @@ export default function Monitoring() {
     return hoursUntil <= 2 && hoursUntil >= 0; // Only include future checkouts within 2 hours
   });
 
-  const openNotificationModal = (booking: any, messageType: string) => {
+  const openNotificationModal = (booking: typeof upcomingCheckouts[0], messageType: string) => {
     setSelectedGuest({
       booking,
       messageType
@@ -309,7 +297,7 @@ export default function Monitoring() {
     openSmsModal();
   };
 
-  const sendBulkReminders = (bookings: any[], messageType: string = 'checkout_reminder') => {
+  const sendBulkReminders = (bookings: typeof upcomingCheckouts) => {
     const bookingIds = bookings.map(b => b.id);
     const form = new FormData();
     form.append("intent", "bulk-checkout-reminders");
@@ -321,7 +309,7 @@ export default function Monitoring() {
     }).then(() => window.location.reload());
   };
 
-  const sendNotification = (bookings: any[], messageType: string, notificationType: string) => {
+  const sendNotification = (bookings: typeof upcomingCheckouts, messageType: string, notificationType: string) => {
     if (bookings.length === 0) return;
     
     const booking = bookings[0];
@@ -347,24 +335,38 @@ export default function Monitoring() {
 
   return (
     <DashboardLayout user={user}>
-      <Stack>
-        <Group justify="space-between">
-          <Title order={2}>Real-time Monitoring</Title>
-          <Group>
-            <ThemeIcon color="blue" variant="light">
-              <IconClockHour2 size={16} />
-            </ThemeIcon>
-            <Text size="sm" c="dimmed">
-              Last updated: {format(currentDateTime, "HH:mm:ss")}
-            </Text>
-          </Group>
-        </Group>
+      <div className="monitoring-dashboard">
+        {/* Header with Real-time Updates */}
+        <div className="dashboard-header">
+          <div className="header-left">
+            <h2 className="dashboard-title">Real-time Monitoring</h2>
+            <div className="subtitle-with-stats">
+              <span className="subtitle">Live apartment monitoring & notifications</span>
+              <div className="quick-stats-inline">
+                <span className="stat-item stat-overdue">{overdueCheckouts.length} overdue</span>
+                <span className="stat-item stat-critical">{criticalCheckouts.length} critical</span>
+                <span className="stat-item stat-upcoming">{upcomingCheckouts.length} upcoming</span>
+              </div>
+            </div>
+          </div>
+          <div className="header-right">
+            <div className="update-indicator">
+              <div className="pulse-dot"></div>
+              <div className="update-info">
+                <span className="update-label">Live Updates</span>
+                <span className="update-time">{format(currentDateTime, "HH:mm:ss")}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
+        {/* Alerts */}
         {actionData?.error && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Error"
             color="red"
+            className="fade-in"
           >
             {actionData.error}
           </Alert>
@@ -375,453 +377,495 @@ export default function Monitoring() {
             icon={<IconInfoCircle size={16} />}
             title="Success"
             color="green"
+            className="fade-in"
           >
             {actionData.success}
           </Alert>
         )}
 
-        {/* Critical Alerts */}
+        {/* Critical Alert Banner */}
         {criticalCheckouts.length > 0 && (
-          <Alert
-            icon={<IconAlertTriangle size={16} />}
-            title="Critical Checkouts Alert"
-            color="red"
-            action={
+          <div className="critical-banner bounce-in">
+            <div className="critical-content">
+              <div className="critical-icon">
+                <IconAlertTriangle size={24} />
+              </div>
+              <div className="critical-info">
+                <h3>Critical Checkouts Alert</h3>
+                <p>{criticalCheckouts.length} tenant(s) need to check out within 2 hours!</p>
+              </div>
               <Button
                 color="red"
-                size="xs"
+                size="sm"
                 variant="white"
+                leftSection={<IconMessage size={16} />}
                 onClick={() => sendBulkReminders(criticalCheckouts, 'overdue_alert')}
+                className="critical-action"
               >
-                Send SMS Reminders
+                Send Emergency SMS
               </Button>
-            }
-          >
-            {criticalCheckouts.length} tenant(s) need to check out within 2 hours!
-          </Alert>
+            </div>
+          </div>
         )}
 
-        {/* Overdue Checkouts */}
-        {overdueCheckouts.length > 0 && (
-          <Card>
-            <Group mb="md">
-              <ThemeIcon color="red" size="lg">
-                <IconAlertTriangle size={20} />
-              </ThemeIcon>
-              <Title order={3} c="red">Overdue Checkouts ({overdueCheckouts.length})</Title>
-              {overdueCheckouts.length > 0 && (
-                <Button
-                  color="red"
-                  size="xs"
-                  variant="light"
-                  leftSection={<IconMessage size={14} />}
-                  onClick={() => sendBulkReminders(overdueCheckouts, 'overdue_alert')}
-                  ml="auto"
-                >
-                  Send Bulk SMS
-                </Button>
-              )}
-            </Group>
-            <Stack gap="md">
-              {overdueCheckouts.map((booking) => {
-                const hoursOverdue = Math.abs(differenceInHours(currentDateTime, new Date(booking.checkOut)));
-                const minutesOverdue = Math.abs(differenceInMinutes(currentDateTime, new Date(booking.checkOut))) % 60;
-                const overdueDisplay = hoursOverdue > 0 ? `${hoursOverdue}h ${minutesOverdue}m` : `${minutesOverdue}m`;
-                return (
-                  <Card key={booking.id} withBorder p="md" style={{ borderLeft: "4px solid #fa5252" }}>
-                    <Group justify="space-between" wrap="nowrap">
-                      <div style={{ flex: 1 }}>
-                        <Group gap="lg" wrap="nowrap">
-                          <div>
-                            <Text fw={600} size="sm" c="red">OVERDUE</Text>
-                            <Text fw={500}>
-                              {booking.user.firstName} {booking.user.lastName}
-                            </Text>
-                            <Text size="sm" c="dimmed">
-                              {booking.user.email}
-                            </Text>
-                          </div>
-                          <div>
-                            <Text size="xs" c="dimmed">UNIT</Text>
-                            <Text fw={500}>Unit {booking.room.number}</Text>
-                            <Text size="sm" c="dimmed">
-                              {booking.room.type.replace("_", " ")}
-                            </Text>
-                          </div>
-                          <div>
-                            <Text size="xs" c="dimmed">EXPECTED CHECKOUT</Text>
-                            <Text fw={500}>{format(new Date(booking.checkOut), "MMM dd, HH:mm")}</Text>
-                            <Badge color="red" size="sm">
-                              {overdueDisplay} overdue
-                            </Badge>
-                          </div>
-                          <div>
-                            <Text size="xs" c="dimmed">DURATION OVERDUE</Text>
-                            <Text fw={700} size="lg" c="red">
-                              {overdueDisplay}
-                            </Text>
-                            <Text size="xs" c="red">past due</Text>
-                          </div>
-                        </Group>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <Text size="xs" c="dimmed">CONTACT</Text>
-                        <Text size="sm" fw={500}>{booking.user.phone}</Text>
-                        <Group gap="xs" mt="xs">
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="red"
-                            leftSection={<IconMessage size={12} />}
-                            onClick={() => openNotificationModal(booking, 'overdue_alert')}
-                          >
-                            SMS
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="green"
-                            leftSection={<IconBrandWhatsapp size={12} />}
-                            onClick={() => sendNotification([booking], 'overdue_alert', 'whatsapp')}
-                          >
-                            WhatsApp
-                          </Button>
-                        </Group>
-                      </div>
-                    </Group>
-                  </Card>
-                );
-              })}
-            </Stack>
-          </Card>
-        )}
-
-        {/* Upcoming Checkouts */}
-        <Card>
-          <Group mb="md">
-            <ThemeIcon color="orange" size="lg">
-              <IconClock size={20} />
-            </ThemeIcon>
-            <Title order={3}>Upcoming Checkouts ({upcomingCheckouts.length})</Title>
-            {upcomingCheckouts.length > 0 && (
-              <Button
-                color="orange"
-                size="xs"
-                variant="light"
-                leftSection={<IconMessage size={14} />}
-                onClick={() => sendBulkReminders(upcomingCheckouts, 'checkout_reminder')}
-                ml="auto"
-              >
-                Send Reminders
-              </Button>
-            )}
-          </Group>
+        {/* Main Content Grid */}
+        <div className="monitoring-grid">
           
-          {upcomingCheckouts.length === 0 ? (
-            <Center p="xl">
-              <Stack align="center">
-                <IconInfoCircle size={48} color="gray" />
-                <Text c="dimmed">No upcoming checkouts in the next 2 months</Text>
-                <Text size="xs" c="dimmed">
-                  This includes both confirmed and checked-in bookings
-                </Text>
-              </Stack>
-            </Center>
-          ) : (
-            <Stack gap="md">
-              {upcomingCheckouts.map((booking) => {
-                const urgency = getUrgencyLevel(booking.checkOut);
-                const timeRemaining = getTimeRemaining(booking.checkOut);
-                return (
-                  <Card 
-                    key={booking.id} 
-                    withBorder 
-                    p="md" 
-                    style={{ 
-                      borderLeft: `4px solid var(--mantine-color-${urgency.color}-6)`,
-                      backgroundColor: urgency.level === "critical" ? "var(--mantine-color-red-0)" : undefined
-                    }}
+          {/* Overdue Checkouts Section */}
+          {overdueCheckouts.length > 0 && (
+            <div className="monitoring-section section-overdue">
+              <div className="section-header">
+                <div className="section-title-group">
+                  <div className="section-icon icon-overdue">
+                    <IconAlertTriangle size={20} />
+                  </div>
+                  <div className="section-title-info">
+                    <h3 className="section-title">Overdue Checkouts</h3>
+                    <span className="section-count">{overdueCheckouts.length} tenants</span>
+                  </div>
+                </div>
+                <div className="section-actions">
+                  <Button
+                    color="red"
+                    size="sm"
+                    variant="light"
+                    leftSection={<IconMessage size={14} />}
+                    onClick={() => sendBulkReminders(overdueCheckouts, 'overdue_alert')}
                   >
-                    <Group justify="space-between" wrap="nowrap">
-                      <div style={{ flex: 1 }}>
-                        <Group gap="lg" wrap="nowrap">
-                          <div>
-                            <Badge color={urgency.color} size="sm" mb="xs">
-                              {urgency.label}
-                            </Badge>
-                            <Text fw={500}>
-                              {booking.user.firstName} {booking.user.lastName}
-                            </Text>
-                            <Text size="sm" c="dimmed">
-                              {booking.user.email}
-                            </Text>
-                          </div>
-                          <div>
-                            <Text size="xs" c="dimmed">UNIT</Text>
-                            <Text fw={500}>Unit {booking.room.number}</Text>
-                            <Text size="sm" c="dimmed">
-                              {booking.room.type.replace("_", " ")}
-                            </Text>
-                          </div>
-                          <div>
-                            <Text size="xs" c="dimmed">CHECKOUT TIME</Text>
-                            <Text fw={500}>
-                              {format(new Date(booking.checkOut), "MMM dd, HH:mm")}
-                            </Text>
-                            <Text size="sm" c="dimmed">
-                              {isToday(new Date(booking.checkOut)) && "Today"}
-                              {isTomorrow(new Date(booking.checkOut)) && "Tomorrow"}
-                            </Text>
-                          </div>
-                          <div>
-                            <Text size="xs" c="dimmed">TIME REMAINING</Text>
-                            <Text fw={700} size="lg" c={urgency.color}>
-                              {timeRemaining}
-                            </Text>
-                            <Text size="xs" c={urgency.color}>until checkout</Text>
-                          </div>
-                        </Group>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <Text size="xs" c="dimmed">CONTACT</Text>
-                        <Text size="sm" fw={500}>{booking.user.phone}</Text>
-                        <Group gap="xs" mt="xs" justify="center">
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="blue"
-                            leftSection={<IconMessage size={12} />}
-                            onClick={() => openNotificationModal(booking, 'checkout_reminder')}
-                          >
-                            SMS
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="green"
-                            leftSection={<IconBrandWhatsapp size={12} />}
-                            onClick={() => sendNotification([booking], 'checkout_reminder', 'whatsapp')}
-                          >
-                            WhatsApp
-                          </Button>
-                        </Group>
-                        <div style={{ marginTop: "8px", textAlign: "center" }}>
-                          <Text size="xs" c="dimmed">TIME LEFT</Text>
-                          <Badge color={urgency.color} size="lg" variant="filled">
-                            {timeRemaining}
-                          </Badge>
-                        </div>
-                      </div>
-                    </Group>
-                  </Card>
-                );
-              })}
-            </Stack>
-          )}
-        </Card>
-
-        {/* Today's Check-ins */}
-        <Card>
-          <Group mb="md">
-            <ThemeIcon color="green" size="lg">
-              <IconCalendarTime size={20} />
-            </ThemeIcon>
-            <Title order={3}>Today's Check-ins</Title>
-          </Group>
-          
-          {todayCheckIns.length === 0 ? (
-            <Center p="xl">
-              <Stack align="center">
-                <IconInfoCircle size={48} color="gray" />
-                <Text c="dimmed">No check-ins scheduled for today</Text>
-              </Stack>
-            </Center>
-          ) : (
-            <Stack gap="md">
-              {todayCheckIns.map((booking) => {
-                // Calculate time until checkout
-                const checkOutTime = new Date(booking.checkOut);
-                const hoursUntilCheckOut = differenceInHours(checkOutTime, currentDateTime);
-                const minutesUntilCheckOut = differenceInMinutes(checkOutTime, currentDateTime) % 60;
-                
-                let timeDisplay, timeStatus, timeColor;
-                if (hoursUntilCheckOut > 24) {
-                  const days = Math.floor(hoursUntilCheckOut / 24);
-                  const remainingHours = hoursUntilCheckOut % 24;
-                  timeDisplay = days > 0 ? `${days}d ${remainingHours}h` : `${hoursUntilCheckOut}h`;
-                  timeStatus = "until checkout";
-                  timeColor = "blue";
-                } else if (hoursUntilCheckOut > 0) {
-                  timeDisplay = `${hoursUntilCheckOut}h ${Math.abs(minutesUntilCheckOut)}m`;
-                  timeStatus = "until checkout";
-                  timeColor = hoursUntilCheckOut <= 6 ? "orange" : "blue";
-                } else if (hoursUntilCheckOut === 0 && minutesUntilCheckOut > 0) {
-                  timeDisplay = `${minutesUntilCheckOut}m`;
-                  timeStatus = "until checkout";
-                  timeColor = "orange";
-                } else {
-                  const hoursOverdue = Math.abs(hoursUntilCheckOut);
-                  const minutesOverdue = Math.abs(minutesUntilCheckOut);
-                  timeDisplay = hoursOverdue > 0 ? `${hoursOverdue}h ${minutesOverdue}m` : `${minutesOverdue}m`;
-                  timeStatus = "overdue";
-                  timeColor = "red";
-                }
-
-                return (
-                <Card 
-                  key={booking.id} 
-                  withBorder 
-                  p="md" 
-                  style={{ 
-                    borderLeft: "4px solid var(--mantine-color-green-6)",
-                    backgroundColor: "var(--mantine-color-green-0)"
-                  }}
-                >
-                  <Group justify="space-between" wrap="nowrap">
-                    <div style={{ flex: 1 }}>
-                      <Group gap="lg" wrap="nowrap">
-                        <div>
-                          <Badge 
-                            color={booking.status === "CHECKED_IN" ? "blue" : "green"} 
-                            size="sm" 
-                            mb="xs"
-                          >
-                            {booking.status === "CHECKED_IN" ? "Checked In" : "Confirmed"}
-                          </Badge>
-                          <Text fw={500}>
-                            {booking.user.firstName} {booking.user.lastName}
-                          </Text>
-                          <Text size="sm" c="dimmed">
-                            {booking.user.email}
-                          </Text>
-                        </div>
-                        <div>
-                          <Text size="xs" c="dimmed">UNIT</Text>
-                          <Text fw={500}>Unit {booking.room.number}</Text>
-                          <Text size="sm" c="dimmed">
-                            {booking.room.type.replace("_", " ")}
-                          </Text>
-                        </div>
-                        <div>
-                          <Text size="xs" c="dimmed">CHECK-IN</Text>
-                          <Text fw={500}>
-                            {(() => {
-                              const checkInDate = new Date(booking.checkIn);
-                              const timeStr = format(checkInDate, "HH:mm");
-                              // If time is 00:00 (midnight), show default check-in time
-                              if (timeStr === "00:00") {
-                                return "3:00 PM";
-                              }
-                              // Format the time nicely
-                              return format(checkInDate, "h:mm a");
-                            })()}
-                          </Text>
-                          <Text size="sm" c="green">
-                            {isToday(new Date(booking.checkIn)) ? "Today" : format(new Date(booking.checkIn), "MMM dd")}
-                          </Text>
-                        </div>
-                        <div>
-                          <Text size="xs" c="dimmed">TIME TO CHECKOUT</Text>
-                          <Text fw={700} size="lg" c={timeColor}>
-                            {timeDisplay}
-                          </Text>
-                          <Text size="xs" c={timeColor}>{timeStatus}</Text>
-                        </div>
-                      </Group>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <Text size="xs" c="dimmed">CONTACT</Text>
-                      <Text size="sm" fw={500}>{booking.user.phone}</Text>
-                      <Group gap="xs" mt="xs" justify="center">
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color={timeColor === 'red' ? 'red' : 'blue'}
-                            leftSection={<IconMessage size={12} />}
-                            onClick={() => openNotificationModal(booking, timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder')}
-                          >
-                            SMS
-                          </Button>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="green"
-                          leftSection={<IconBrandWhatsapp size={12} />}
-                          onClick={() => sendNotification([booking], timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder', 'whatsapp')}
-                        >
-                          WhatsApp
-                        </Button>
-                      </Group>
-                      <div style={{ marginTop: "8px", textAlign: "center" }}>
-                        <Badge color={timeColor} size="lg" variant="filled">
-                          {timeDisplay}
-                        </Badge>
-                        <Text size="xs" c={timeColor} mt={2}>{timeStatus}</Text>
-                      </div>
-                    </div>
-                  </Group>
-                </Card>
-              );
-              })}
-            </Stack>
-          )}
-        </Card>
-
-        {/* Quick Stats */}
-        <Grid>
-          <Grid.Col span={{ base: 12, md: 3 }}>
-            <Card>
-              <Group>
-                <ThemeIcon color="red" size="lg">
-                  <IconAlertTriangle size={20} />
-                </ThemeIcon>
-                <div>
-                  <Text size="xl" fw={700}>{overdueCheckouts.length}</Text>
-                  <Text size="sm" c="dimmed">Overdue</Text>
+                    Bulk Alert
+                  </Button>
                 </div>
-              </Group>
-            </Card>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 3 }}>
-            <Card>
-              <Group>
-                <ThemeIcon color="orange" size="lg">
+              </div>
+              
+              <div className="booking-cards">
+                {overdueCheckouts.map((booking) => {
+                  const hoursOverdue = Math.abs(differenceInHours(currentDateTime, new Date(booking.checkOut)));
+                  const minutesOverdue = Math.abs(differenceInMinutes(currentDateTime, new Date(booking.checkOut))) % 60;
+                  const overdueDisplay = hoursOverdue > 0 ? `${hoursOverdue}h ${minutesOverdue}m` : `${minutesOverdue}m`;
+                  
+                  return (
+                    <div key={booking.id} className="booking-card card-overdue fade-in">
+                      <div className="card-status-bar"></div>
+                      <div className="card-content">
+                        <div className="card-main-info">
+                          <div className="guest-info">
+                            <div className="guest-avatar">
+                              <IconUser size={20} />
+                            </div>
+                            <div className="guest-details">
+                              <h4 className="guest-name">
+                                {booking.user.firstName} {booking.user.lastName}
+                              </h4>
+                              <p className="guest-email">{booking.user.email}</p>
+                              <div className="status-badge badge-overdue">
+                                OVERDUE: {overdueDisplay}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="room-info">
+                            <div className="info-group">
+                              <span className="info-label">Room</span>
+                              <span className="info-value">Unit {booking.room.number}</span>
+                              <span className="info-detail">{booking.room.type.replace("_", " ")}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="checkout-info">
+                            <div className="info-group">
+                              <span className="info-label">Expected Checkout</span>
+                              <span className="info-value">{format(new Date(booking.checkOut), "MMM dd, HH:mm")}</span>
+                              <span className="time-overdue">{overdueDisplay} past due</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="card-actions">
+                          <div className="contact-info">
+                            <span className="contact-label">Contact</span>
+                            <span className="contact-number">{booking.user.phone}</span>
+                          </div>
+                          <div className="action-buttons">
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="blue"
+                              leftSection={<IconMessage size={12} />}
+                              onClick={() => openNotificationModal(booking, 'overdue_alert')}
+                              className="contact-btn"
+                            >
+                              SMS
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="green"
+                              leftSection={<IconBrandWhatsapp size={12} />}
+                              onClick={() => sendNotification([booking], 'overdue_alert', 'whatsapp')}
+                              className="contact-btn"
+                            >
+                              WhatsApp
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="orange"
+                              leftSection={<IconPhone size={12} />}
+                              onClick={() => sendNotification([booking], 'overdue_alert', 'voice')}
+                              className="contact-btn"
+                            >
+                              Call
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Upcoming Checkouts Section */}
+          <div className="monitoring-section section-upcoming">
+            <div className="section-header">
+              <div className="section-title-group">
+                <div className="section-icon icon-upcoming">
                   <IconClock size={20} />
-                </ThemeIcon>
-                <div>
-                  <Text size="xl" fw={700}>{criticalCheckouts.length}</Text>
-                  <Text size="sm" c="dimmed">Critical (2h)</Text>
                 </div>
-              </Group>
-            </Card>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 3 }}>
-            <Card>
-              <Group>
-                <ThemeIcon color="blue" size="lg">
-                  <IconBed size={20} />
-                </ThemeIcon>
-                <div>
-                  <Text size="xl" fw={700}>{upcomingCheckouts.length}</Text>
-                  <Text size="sm" c="dimmed">Upcoming (2mo)</Text>
+                <div className="section-title-info">
+                  <h3 className="section-title">Upcoming Checkouts</h3>
+                  <span className="section-count">{upcomingCheckouts.length} scheduled</span>
                 </div>
-              </Group>
-            </Card>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 3 }}>
-            <Card>
-              <Group>
-                <ThemeIcon color="green" size="lg">
-                  <IconUser size={20} />
-                </ThemeIcon>
-                <div>
-                  <Text size="xl" fw={700}>{todayCheckIns.length}</Text>
-                  <Text size="sm" c="dimmed">Today's Check-ins</Text>
+              </div>
+              {upcomingCheckouts.length > 0 && (
+                <div className="section-actions">
+                  <Button
+                    color="orange"
+                    size="sm"
+                    variant="light"
+                    leftSection={<IconMessage size={14} />}
+                    onClick={() => sendBulkReminders(upcomingCheckouts, 'checkout_reminder')}
+                  >
+                    Send Reminders
+                  </Button>
                 </div>
-              </Group>
-            </Card>
-          </Grid.Col>
-        </Grid>
+              )}
+            </div>
+            
+            {upcomingCheckouts.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">
+                  <IconInfoCircle size={48} />
+                </div>
+                <h4>No upcoming checkouts</h4>
+                <p>No checkouts scheduled in the next 2 months</p>
+              </div>
+            ) : (
+              <div className="booking-cards">
+                {upcomingCheckouts.map((booking) => {
+                  const urgency = getUrgencyLevel(booking.checkOut);
+                  const timeRemaining = getTimeRemaining(booking.checkOut);
+                  
+                  return (
+                    <div 
+                      key={booking.id} 
+                      className={`booking-card card-upcoming urgency-${urgency.level} fade-in`}
+                    >
+                      <div className="card-status-bar"></div>
+                      <div className="card-content">
+                        <div className="card-main-info">
+                          <div className="guest-info">
+                            <div className="guest-avatar">
+                              <IconUser size={20} />
+                            </div>
+                            <div className="guest-details">
+                              <h4 className="guest-name">
+                                {booking.user.firstName} {booking.user.lastName}
+                              </h4>
+                              <p className="guest-email">{booking.user.email}</p>
+                              <div className={`status-badge badge-${urgency.level}`}>
+                                {urgency.label} Priority
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="room-info">
+                            <div className="info-group">
+                              <span className="info-label">Room</span>
+                              <span className="info-value">Unit {booking.room.number}</span>
+                              <span className="info-detail">{booking.room.type.replace("_", " ")}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="checkout-info">
+                            <div className="info-group">
+                              <span className="info-label">Checkout Time</span>
+                              <span className="info-value">
+                                {format(new Date(booking.checkOut), "MMM dd, HH:mm")}
+                              </span>
+                              <span className="info-detail">
+                                {isToday(new Date(booking.checkOut)) && "Today"}
+                                {isTomorrow(new Date(booking.checkOut)) && "Tomorrow"}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="time-remaining">
+                            <div className="info-group">
+                              <span className="info-label">Time Left</span>
+                              <span className={`time-value time-${urgency.level}`}>{timeRemaining}</span>
+                              <span className="time-unit">until checkout</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="card-actions">
+                          <div className="contact-info">
+                            <span className="contact-label">Contact</span>
+                            <span className="contact-number">{booking.user.phone}</span>
+                          </div>
+                          <div className="action-buttons">
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="blue"
+                              leftSection={<IconMessage size={12} />}
+                              onClick={() => openNotificationModal(booking, 'checkout_reminder')}
+                              className="contact-btn"
+                            >
+                              SMS
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="green"
+                              leftSection={<IconBrandWhatsapp size={12} />}
+                              onClick={() => sendNotification([booking], 'checkout_reminder', 'whatsapp')}
+                              className="contact-btn"
+                            >
+                              WhatsApp
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="orange"
+                              leftSection={<IconPhone size={12} />}
+                              onClick={() => sendNotification([booking], 'checkout_reminder', 'voice')}
+                              className="contact-btn"
+                            >
+                              Call
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Today's Check-ins Section */}
+          <div className="monitoring-section section-checkins">
+            <div className="section-header">
+              <div className="section-title-group">
+                <div className="section-icon icon-checkins">
+                  <IconCalendarTime size={20} />
+                </div>
+                <div className="section-title-info">
+                  <h3 className="section-title">Today&apos;s Check-ins</h3>
+                  <span className="section-count">{todayCheckIns.length} arrivals</span>
+                </div>
+              </div>
+            </div>
+            
+            {todayCheckIns.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">
+                  <IconInfoCircle size={48} />
+                </div>
+                <h4>No check-ins today</h4>
+                <p>No arrivals scheduled for today</p>
+              </div>
+            ) : (
+              <div className="booking-cards">
+                {todayCheckIns.map((booking) => {
+                  const checkOutTime = new Date(booking.checkOut);
+                  const hoursUntilCheckOut = differenceInHours(checkOutTime, currentDateTime);
+                  const minutesUntilCheckOut = differenceInMinutes(checkOutTime, currentDateTime) % 60;
+                  
+                  let timeDisplay, timeStatus, timeColor;
+                  if (hoursUntilCheckOut > 24) {
+                    const days = Math.floor(hoursUntilCheckOut / 24);
+                    const remainingHours = hoursUntilCheckOut % 24;
+                    timeDisplay = days > 0 ? `${days}d ${remainingHours}h` : `${hoursUntilCheckOut}h`;
+                    timeStatus = "until checkout";
+                    timeColor = "blue";
+                  } else if (hoursUntilCheckOut > 0) {
+                    timeDisplay = `${hoursUntilCheckOut}h ${Math.abs(minutesUntilCheckOut)}m`;
+                    timeStatus = "until checkout";
+                    timeColor = hoursUntilCheckOut <= 6 ? "orange" : "blue";
+                  } else if (hoursUntilCheckOut === 0 && minutesUntilCheckOut > 0) {
+                    timeDisplay = `${minutesUntilCheckOut}m`;
+                    timeStatus = "until checkout";
+                    timeColor = "orange";
+                  } else {
+                    const hoursOverdue = Math.abs(hoursUntilCheckOut);
+                    const minutesOverdue = Math.abs(minutesUntilCheckOut);
+                    timeDisplay = hoursOverdue > 0 ? `${hoursOverdue}h ${minutesOverdue}m` : `${minutesOverdue}m`;
+                    timeStatus = "overdue";
+                    timeColor = "red";
+                  }
+
+                  return (
+                    <div key={booking.id} className="booking-card card-checkin fade-in">
+                      <div className="card-status-bar"></div>
+                      <div className="card-content">
+                        <div className="card-main-info">
+                          <div className="guest-info">
+                            <div className="guest-avatar">
+                              <IconUser size={20} />
+                            </div>
+                            <div className="guest-details">
+                              <h4 className="guest-name">
+                                {booking.user.firstName} {booking.user.lastName}
+                              </h4>
+                              <p className="guest-email">{booking.user.email}</p>
+                              <div className={`status-badge badge-${booking.status === "CHECKED_IN" ? "checked-in" : "confirmed"}`}>
+                                {booking.status === "CHECKED_IN" ? "Checked In" : "Confirmed"}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="room-info">
+                            <div className="info-group">
+                              <span className="info-label">Room</span>
+                              <span className="info-value">Unit {booking.room.number}</span>
+                              <span className="info-detail">{booking.room.type.replace("_", " ")}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="checkin-info">
+                            <div className="info-group">
+                              <span className="info-label">Check-in</span>
+                              <span className="info-value">
+                                {(() => {
+                                  const checkInDate = new Date(booking.checkIn);
+                                  const timeStr = format(checkInDate, "HH:mm");
+                                  if (timeStr === "00:00") {
+                                    return "3:00 PM";
+                                  }
+                                  return format(checkInDate, "h:mm a");
+                                })()}
+                              </span>
+                              <span className="info-detail">
+                                {isToday(new Date(booking.checkIn)) ? "Today" : format(new Date(booking.checkIn), "MMM dd")}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="checkout-countdown">
+                            <div className="info-group">
+                              <span className="info-label">Until Checkout</span>
+                              <span className={`time-value time-${timeColor}`}>{timeDisplay}</span>
+                              <span className="time-unit">{timeStatus}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="card-actions">
+                          <div className="contact-info">
+                            <span className="contact-label">Contact</span>
+                            <span className="contact-number">{booking.user.phone}</span>
+                          </div>
+                          <div className="action-buttons">
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color={timeColor === 'red' ? 'red' : 'blue'}
+                              leftSection={<IconMessage size={12} />}
+                              onClick={() => openNotificationModal(booking, timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder')}
+                              className="contact-btn"
+                            >
+                              SMS
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="green"
+                              leftSection={<IconBrandWhatsapp size={12} />}
+                              onClick={() => sendNotification([booking], timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder', 'whatsapp')}
+                              className="contact-btn"
+                            >
+                              WhatsApp
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="orange"
+                              leftSection={<IconPhone size={12} />}
+                              onClick={() => sendNotification([booking], timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder', 'voice')}
+                              className="contact-btn"
+                            >
+                              Call
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Statistics Dashboard */}
+        <div className="stats-dashboard">
+          <h3 className="stats-title">Quick Statistics</h3>
+          <div className="stats-grid">
+            <div className="stat-card stat-overdue">
+              <div className="stat-icon">
+                <IconAlertTriangle size={24} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-number">{overdueCheckouts.length}</span>
+                <span className="stat-label">Overdue Checkouts</span>
+              </div>
+            </div>
+            
+            <div className="stat-card stat-critical">
+              <div className="stat-icon">
+                <IconClock size={24} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-number">{criticalCheckouts.length}</span>
+                <span className="stat-label">Critical (2h)</span>
+              </div>
+            </div>
+            
+            <div className="stat-card stat-upcoming">
+              <div className="stat-icon">
+                <IconBed size={24} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-number">{upcomingCheckouts.length}</span>
+                <span className="stat-label">Upcoming (2mo)</span>
+              </div>
+            </div>
+            
+            <div className="stat-card stat-checkins">
+              <div className="stat-icon">
+                <IconUser size={24} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-number">{todayCheckIns.length}</span>
+                <span className="stat-label">Today&apos;s Check-ins</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* SMS Notification Modal */}
         <Modal opened={smsModalOpened} onClose={closeSmsModal} title="Send SMS Notification" size="lg">
@@ -885,7 +929,7 @@ export default function Monitoring() {
             </Form>
           )}
         </Modal>
-      </Stack>
+      </div>
     </DashboardLayout>
   );
 }

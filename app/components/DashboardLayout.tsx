@@ -1,31 +1,35 @@
 import {
   AppShell,
   Text,
-  Group,
-  NavLink,
-  Button,
   Avatar,
   Menu,
-  Burger,
+  Badge,
+  Stack,
+  ActionIcon,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { Form, Link } from "@remix-run/react";
+import { Form, Link, useLocation } from "@remix-run/react";
 import {
-  IconDashboard,
   IconBed,
-  IconCalendar,
   IconUsers,
-  IconCreditCard,
   IconSettings,
   IconLogout,
-  IconTool,
-  IconChartBar,
   IconBuildingStore,
   IconClockHour2,
-  IconShield,
   IconReport,
+  IconBell,
+  IconChevronDown,
+  IconChevronRight,
+  IconActivity,
+  IconHome,
+  IconNetwork,
+  IconPlayerPlay,
+  IconCreditCard,
+  IconChartBar,
+  IconWallet,
 } from "@tabler/icons-react";
 import type { User } from "@prisma/client";
+import { useState, useEffect } from "react";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -33,103 +37,345 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, user }: DashboardLayoutProps) {
-  const [opened, { toggle }] = useDisclosure();
+  const [opened] = useDisclosure();
+  const [checkoutCount, setCheckoutCount] = useState(0);
+  const location = useLocation();
 
-  const navigationItems = [
-    { icon: IconDashboard, label: "Dashboard", link: "/dashboard" },
-    { icon: IconClockHour2, label: "Monitoring", link: "/dashboard/monitoring" },
-    { icon: IconBed, label: "Rooms", link: "/dashboard/rooms" },
-    { icon: IconCalendar, label: "Bookings", link: "/dashboard/bookings" },
-    { icon: IconUsers, label: "Guests", link: "/dashboard/guests" },
-    { icon: IconUsers, label: "Users", link: "/dashboard/users" },
-    { icon: IconCreditCard, label: "Payments", link: "/dashboard/payments" },
-    { icon: IconCreditCard, label: "Payment Accounts", link: "/dashboard/payment-accounts" },
-    { icon: IconShield, label: "Security Deposits", link: "/dashboard/security-deposits" },
-    { icon: IconBuildingStore, label: "Services", link: "/dashboard/services" },
-    { icon: IconTool, label: "Maintenance", link: "/dashboard/maintenance" },
-    { icon: IconChartBar, label: "Analytics", link: "/dashboard/analytics" },
-    { icon: IconReport, label: "Reports", link: "/dashboard/reports" },
-    { icon: IconSettings, label: "Settings", link: "/dashboard/settings" },
+  // Calculate checkout counts (overdue + upcoming)
+  useEffect(() => {
+    const calculateCheckouts = async () => {
+      try {
+        console.log('Fetching checkout status...');
+        const response = await fetch('/api/checkout-status');
+        console.log('Response status:', response.status);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Checkout data:', data);
+          const total = data.overdueCount + data.upcomingCount;
+          console.log('Setting checkout count to:', total);
+          setCheckoutCount(total);
+        } else {
+          console.error('API response not ok:', response.status);
+        }
+      } catch (error) {
+        console.error('Failed to fetch checkout status:', error);
+        // Fallback to 0 if API fails
+        setCheckoutCount(0);
+      }
+    };
+
+    calculateCheckouts();
+    // Refresh every 5 minutes
+    const interval = setInterval(calculateCheckouts, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const mainNavigationItems = [
+    { icon: IconHome, label: "Dashboard", link: "/dashboard", isActive: location.pathname === "/dashboard" },
+    { 
+      icon: IconActivity, 
+      label: "Monitoring", 
+      link: "/dashboard/monitoring", 
+      hasSubmenu: true,
+      badge: checkoutCount > 0 ? checkoutCount.toString() : "0", // Show 0 for debugging
+      isActive: location.pathname.includes("/monitoring")
+    },
+    { icon: IconBed, label: "Rooms", link: "/dashboard/rooms", isActive: location.pathname.includes("/rooms") },
+    { icon: IconUsers, label: "Guests", link: "/dashboard/guests", isActive: location.pathname.includes("/guests") },
+    { 
+      icon: IconBell, 
+      label: "Bookings", 
+      link: "/dashboard/bookings", 
+      isActive: location.pathname.includes("/bookings")
+    },
+  ];
+
+  const propertyManagementItems = [
+    { icon: IconBuildingStore, label: "Blocks", link: "/dashboard/blocks", isActive: location.pathname.includes("/blocks") },
+    { icon: IconClockHour2, label: "Maintenance", link: "/dashboard/maintenance", isActive: location.pathname.includes("/maintenance") },
+    { icon: IconPlayerPlay, label: "Services", link: "/dashboard/services", isActive: location.pathname.includes("/services") },
+  ];
+
+  const financialItems = [
+    { icon: IconCreditCard, label: "Payments", link: "/dashboard/payments", isActive: location.pathname.includes("/payments") },
+    { icon: IconWallet, label: "Payment Accounts", link: "/dashboard/payment-accounts", isActive: location.pathname.includes("/payment-accounts") },
+    { icon: IconNetwork, label: "Security Deposits", link: "/dashboard/security-deposits", isActive: location.pathname.includes("/security-deposits") },
+  ];
+
+  const bottomNavigationItems = [
+    { icon: IconUsers, label: "Users", link: "/dashboard/users", isActive: location.pathname.includes("/users") },
+    { icon: IconChartBar, label: "Analytics", link: "/dashboard/analytics", isActive: location.pathname.includes("/analytics") },
+    { icon: IconReport, label: "Reports", link: "/dashboard/reports", isActive: location.pathname.includes("/reports") },
+    { icon: IconSettings, label: "Settings", link: "/dashboard/settings", isActive: location.pathname.includes("/settings") },
   ];
 
   // Filter navigation based on user role
-  const filteredNavigation = navigationItems.filter((item) => {
+  const filteredMainNavigation = mainNavigationItems.filter((item) => {
     if (!user) return false;
     if (user.role === "ADMIN") return true;
     if (user.role === "MANAGER") {
-      return !["Settings", "Users"].includes(item.label);
+      return !["Users"].includes(item.label);
     }
     if (user.role === "STAFF") {
-      return ["Dashboard", "Monitoring", "Rooms", "Bookings", "Guests", "Payments", "Security Deposits", "Services", "Maintenance"].includes(item.label);
+      return ["Dashboard", "Monitoring", "Rooms", "Guests", "Bookings"].includes(item.label);
     }
-    return ["Dashboard", "Bookings"].includes(item.label);
+    return ["Dashboard", "Monitoring"].includes(item.label);
+  });
+
+  const filteredPropertyManagement = user 
+    ? (user.role === "ADMIN" || user.role === "MANAGER") 
+      ? propertyManagementItems 
+      : []
+    : [];
+
+  const filteredFinancialItems = financialItems.filter((item) => {
+    if (!user) return false;
+    if (user.role === "ADMIN") return true;
+    if (user.role === "MANAGER") {
+      return !["Security Deposits"].includes(item.label);
+    }
+    return false; // Staff and Guests don't see financial items
+  });
+
+  const filteredBottomNavigation = bottomNavigationItems.filter((item) => {
+    if (!user) return false;
+    if (user.role === "ADMIN") return true;
+    if (user.role === "MANAGER") {
+      return !["Users"].includes(item.label);
+    }
+    if (user.role === "STAFF") {
+      return ["Analytics", "Reports"].includes(item.label);
+    }
+    return ["Reports"].includes(item.label);
   });
 
   return (
-    <AppShell
-      header={{ height: 60 }}
-      navbar={{
-        width: 300,
-        breakpoint: "sm",
-        collapsed: { mobile: !opened },
-      }}
-      padding="md"
-    >
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Text size="xl" w={{ base: 150, xs: 150, md: "100%" }} fw={700} truncate c="blue">
-              🏨 Platinum Apartment Management
-            </Text>
-          </Group>
+    <>
+      <AppShell
+        header={{ height: 0 }}
+        navbar={{
+          width: 280,
+          breakpoint: "sm",
+          collapsed: { mobile: !opened, desktop: false },
+        }}
+        padding={0}
+        styles={{
+          root: {
+            background: '#f8fafc',
+            minHeight: '100vh',
+          },
+          navbar: {
+            background: '#2a3447',
+            border: 'none',
+            boxShadow: 'none',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            zIndex: 1000,
+          },
+          main: {
+            background: 'transparent',
+            padding: 0,
+            marginLeft: '280px',
+            width: 'calc(100% - 280px)',
+          }
+        }}
+      >
+        <AppShell.Navbar p={0}>
+          <div className="modern-navbar">
+            {/* Header Section */}
+            <div className="navbar-header">
+              <div className="brand-section">
+                <div className="brand-logo">
+                  <div className="logo-icon">
+                    <IconBuildingStore size={24} color="white" />
+                  </div>
+                  <div className="brand-info">
+                    <Text className="brand-name" style={{ color: 'white', fontSize: '16px', fontWeight: 600 }}>
+                      Platinum Apartments
+                    </Text>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          {user && (
-            <Menu shadow="md" width={200}>
-              <Menu.Target>
-                <Button variant="subtle" leftSection={
-                  <Avatar size="sm" radius="xl">
-                    {user.firstName[0]}{user.lastName[0]}
-                  </Avatar>
-                }>
-                  {user.firstName} {user.lastName}
-                </Button>
-              </Menu.Target>
-
-              <Menu.Dropdown>
-                <Menu.Label>Account</Menu.Label>
-                <Menu.Divider />
-                <Form method="post" action="/logout">
-                  <Menu.Item
-                    type="submit"
-                    leftSection={<IconLogout size={16} />}
-                    c="red"
+            {/* Main Navigation */}
+            <div className="navbar-content">
+              <Stack gap={2}>
+                {filteredMainNavigation.map((item) => (
+                  <Link
+                    key={item.label}
+                    to={item.link}
+                    className={`nav-item ${item.isActive ? 'active' : ''}`}
+                    style={{ textDecoration: 'none' }}
                   >
-                    Logout
-                  </Menu.Item>
-                </Form>
-              </Menu.Dropdown>
-            </Menu>
-          )}
-        </Group>
-      </AppShell.Header>
+                    <div className="nav-item-content">
+                      <div className="nav-icon">
+                        <item.icon size={18} />
+                      </div>
+                      <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                        {item.label}
+                      </span>
+                      {item.badge && (
+                        <Badge size="xs" className="nav-badge">
+                          {item.badge}
+                        </Badge>
+                      )}
+                      {item.hasSubmenu && (
+                        <IconChevronDown size={14} className="nav-chevron" />
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </Stack>
 
-      <AppShell.Navbar p="md">
-        <AppShell.Section grow style={{ overflowY: 'auto', maxHeight: '100%' }}>
-          {filteredNavigation.map((item) => (
-            <NavLink
-              key={item.label}
-              component={Link}
-              to={item.link}
-              label={item.label}
-              leftSection={<item.icon size={16} />}
-              mb="xs"
-            />
-          ))}
-        </AppShell.Section>
-      </AppShell.Navbar>
+              {/* Property Management Section */}
+              {filteredPropertyManagement.length > 0 && (
+                <div className="property-section">
+                  <div className="section-label">
+                    <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ color: '#8fa2b3', padding: '12px 16px 8px' }}>
+                      PROPERTY
+                    </Text>
+                  </div>
+                  <Stack gap={2}>
+                    {filteredPropertyManagement.map((item) => (
+                      <Link
+                        key={item.label}
+                        to={item.link}
+                        className={`nav-item ${item.isActive ? 'active' : ''}`}
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <div className="nav-item-content">
+                          <div className="nav-icon">
+                            <item.icon size={18} />
+                          </div>
+                          <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                            {item.label}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </Stack>
+                </div>
+              )}
 
-      <AppShell.Main>{children}</AppShell.Main>
-    </AppShell>
+              {/* Financial Section */}
+              {filteredFinancialItems.length > 0 && (
+                <div className="financial-section">
+                  <div className="section-label">
+                    <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ color: '#8fa2b3', padding: '12px 16px 8px' }}>
+                      FINANCIAL
+                    </Text>
+                  </div>
+                  <Stack gap={2}>
+                    {filteredFinancialItems.map((item) => (
+                      <Link
+                        key={item.label}
+                        to={item.link}
+                        className={`nav-item ${item.isActive ? 'active' : ''}`}
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <div className="nav-item-content">
+                          <div className="nav-icon">
+                            <item.icon size={18} />
+                          </div>
+                          <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                            {item.label}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </Stack>
+                </div>
+              )}
+
+              {/* Administration Section */}
+              {filteredBottomNavigation.length > 0 && (
+                <div className="administration-section">
+                  <div className="section-label">
+                    <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ color: '#8fa2b3', padding: '12px 16px 8px' }}>
+                      ADMINISTRATION
+                    </Text>
+                  </div>
+                  <Stack gap={2}>
+                    {filteredBottomNavigation.map((item) => (
+                      <Link
+                        key={item.label}
+                        to={item.link}
+                        className={`nav-item ${item.isActive ? 'active' : ''}`}
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <div className="nav-item-content">
+                          <div className="nav-icon">
+                            <item.icon size={18} />
+                          </div>
+                          <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                            {item.label}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </Stack>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Section - Fixed Controls */}
+            <div className="navbar-bottom">
+              {/* User Profile */}
+              {user && (
+                <div className="user-profile">
+                  <Menu shadow="md" width={200} position="right-end">
+                    <Menu.Target>
+                      <div className="profile-section">
+                        <Avatar
+                          size={32}
+                          radius="xl"
+                          className="profile-avatar"
+                          src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.firstName} ${user.lastName}`}
+                        >
+                          {user.firstName[0]}{user.lastName[0]}
+                        </Avatar>
+                        <div className="profile-info">
+                          <Text size="sm" fw={500} c="white" className="profile-name">
+                            {user.firstName}
+                          </Text>
+                          <Text size="xs" c="dimmed" className="profile-email">
+                            {user.email}
+                          </Text>
+                        </div>
+                        <ActionIcon size="sm" variant="subtle" className="profile-menu">
+                          <IconChevronRight size={12} />
+                        </ActionIcon>
+                      </div>
+                    </Menu.Target>
+
+                    <Menu.Dropdown className="profile-dropdown">
+                      <Menu.Label>Account</Menu.Label>
+                      <Menu.Divider />
+                      <Form method="post" action="/logout">
+                        <Menu.Item
+                          type="submit"
+                          leftSection={<IconLogout size={16} />}
+                          c="red"
+                        >
+                          Logout
+                        </Menu.Item>
+                      </Form>
+                    </Menu.Dropdown>
+                  </Menu>
+                </div>
+              )}
+            </div>
+          </div>
+        </AppShell.Navbar>
+
+        <AppShell.Main>
+          <div className="main-content">
+            {children}
+          </div>
+        </AppShell.Main>
+      </AppShell>
+    </>
   );
 }

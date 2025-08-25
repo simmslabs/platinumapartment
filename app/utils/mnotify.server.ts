@@ -32,7 +32,12 @@ interface MNotifyResponse {
   status: string;
   code: string;
   message: string;
-  data?: any;
+  data?: {
+    id?: string;
+    balance?: string;
+    currency?: string;
+    [key: string]: unknown;
+  };
 }
 
 class MNotifyService {
@@ -42,7 +47,7 @@ class MNotifyService {
     this.config = {
       apiKey: process.env.MNOTIFY_API_KEY || '',
       senderId: process.env.MNOTIFY_SENDER_ID || 'ApartmentMgmt',
-      baseUrl: 'https://api.mnotify.com/api/sms/quick',
+      baseUrl: `https://api.mnotify.com/api/sms/quick?key=${process.env.MNOTIFY_API_KEY}`,
     };
 
     if (!this.config.apiKey) {
@@ -50,13 +55,14 @@ class MNotifyService {
     }
   }
 
-  private async makeRequest(endpoint: string, data: any): Promise<MNotifyResponse> {
+  private async makeRequest(endpoint: string, data: Record<string, unknown>): Promise<MNotifyResponse> {
     try {
       const response = await fetch(`${this.config.baseUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          "api_key": this.config.apiKey
         },
         body: JSON.stringify({
           key: this.config.apiKey,
@@ -78,12 +84,12 @@ class MNotifyService {
     }
 
     // Clean phone number (remove spaces, dashes, and ensure proper format)
-    const cleanedRecipient = recipient.replace(/[\s\-\(\)]/g, '');
+    const cleanedRecipient = recipient.replace(/[\s\-()]/g, '');
     
     return await this.makeRequest('', {
-      to: cleanedRecipient,
-      msg: message,
-      sender_id: senderId || this.config.senderId,
+      recipient: [cleanedRecipient],
+      message,
+      sender: senderId || this.config.senderId,
     });
   }
 
@@ -92,12 +98,12 @@ class MNotifyService {
       throw new Error('MNotify API key not configured');
     }
 
-    const cleanedRecipients = recipients.map(phone => phone.replace(/[\s\-\(\)]/g, ''));
+    const cleanedRecipients = recipients.map(phone => phone.replace(/[\s\-()]/g, ''));
 
     return await this.makeRequest('', {
-      to: cleanedRecipients.join(','),
-      msg: message,
-      sender_id: senderId || this.config.senderId,
+      recipients: cleanedRecipients.join(','),
+      message,
+      sender: senderId || this.config.senderId,
     });
   }
 
@@ -106,9 +112,15 @@ class MNotifyService {
       throw new Error('MNotify API key not configured');
     }
 
-    const cleanedRecipient = recipient.replace(/[\s\-\(\)]/g, '');
+    const cleanedRecipient = recipient.replace(/[\s\-()]/g, '');
 
-    const payload: any = {
+    const payload: {
+      key: string;
+      to: string;
+      msg: string;
+      media_url?: string;
+      media_type?: string;
+    } = {
       key: this.config.apiKey,
       to: cleanedRecipient,
       msg: message,
@@ -119,7 +131,7 @@ class MNotifyService {
       payload.media_type = mediaType;
     }
 
-    const response = await fetch('https://api.mnotify.net/api/whatsapp/send', {
+    const response = await fetch('https://api.mnotify.com/api/whatsapp/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -136,9 +148,9 @@ class MNotifyService {
       throw new Error('MNotify API key not configured');
     }
 
-    const cleanedRecipient = recipient.replace(/[\s\-\(\)]/g, '');
+    const cleanedRecipient = recipient.replace(/[\s\-()]/g, '');
 
-    const response = await fetch('https://api.mnotify.net/api/voice/quick', {
+    const response = await fetch('https://api.mnotify.com/api/voice/quick', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

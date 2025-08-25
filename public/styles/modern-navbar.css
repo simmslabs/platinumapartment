@@ -1,0 +1,559 @@
+/* Modern Navbar - Zemlya Studio Inspired */
+/* High specificity to override Mantine styles */
+
+.modern-navbar {
+  height: 100vh;
+  background: #2a3447 !important;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  width: 280px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+
+/* Ensure navbar container is fixed */
+.mantine-AppShell-navbar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 280px !important;
+  height: 100vh !important;
+  z-index: 1000 !important;
+}
+
+/* Additional override for AppShell root to ensure proper layout */
+.mantine-AppShell-root {
+  position: relative !important;
+}
+
+.modern-navbar * {
+  box-sizing: border-box;
+}
+
+/* Force text color throughout the navbar */
+.modern-navbar,
+.modern-navbar *,
+.modern-navbar .mantine-Text-root,
+.modern-navbar .nav-label,
+.modern-navbar span {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.modern-navbar .brand-name,
+.modern-navbar .brand-name.mantine-Text-root {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+  margin: 0 !important;
+}
+
+.modern-navbar input,
+.modern-navbar .search-field {
+  color: white !important;
+}
+
+/* Header Section */
+.navbar-header {
+  padding: 10px 16px 16px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-name {
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+  margin: 0 !important;
+}
+
+.window-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.control-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.control-dot.red {
+  background: #ff5f57;
+}
+
+.control-dot.yellow {
+  background: #ffbd2e;
+}
+
+.control-dot.green {
+  background: #28ca42;
+}
+
+/* Search Section */
+.search-section {
+  margin-bottom: 20px;
+}
+
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: #6b7280;
+  z-index: 1;
+}
+
+.search-field {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px 8px 36px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.search-field:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.search-field::placeholder {
+  color: #6b7280;
+}
+
+/* Menu Label */
+.menu-label {
+  margin-bottom: 12px;
+}
+
+.menu-label .mantine-Text-root {
+  color: #6b7280 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px;
+}
+
+/* Navigation Content */
+.navbar-content {
+  flex: 1;
+  padding: 0 16px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.navbar-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* Navigation Items */
+.nav-item {
+  display: block;
+  text-decoration: none !important;
+  margin-bottom: 2px;
+}
+
+.nav-item-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.2s ease;
+  position: relative;
+  text-decoration: none !important;
+}
+
+.nav-item:hover .nav-item-content {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.nav-item:hover .nav-label {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.nav-item.active .nav-item-content {
+  background: rgba(103, 126, 234, 0.15);
+  color: white !important;
+  border-left: 3px solid #667eea;
+  padding-left: 9px;
+}
+
+.nav-item.active .nav-label {
+  color: white !important;
+  font-weight: 600;
+}
+
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+}
+
+.nav-label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9) !important;
+  line-height: 1.2;
+}
+
+.nav-badge {
+  background: #ef4444 !important;
+  color: white !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 !important;
+  border-radius: 9px !important;
+}
+
+.nav-chevron {
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.2s ease;
+}
+
+.nav-item.expanded .nav-chevron {
+  transform: rotate(180deg);
+}
+
+.nav-count {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Expanded Section */
+.expanded-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.expanded-item .nav-item-content {
+  padding-left: 24px;
+  font-size: 13px;
+}
+
+.expanded-item .nav-icon {
+  min-width: 16px;
+}
+
+/* Section Styles */
+.property-section,
+.financial-section,
+.administration-section {
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.property-section .section-label,
+.financial-section .section-label,
+.administration-section .section-label {
+  margin-bottom: 8px;
+}
+
+.section-label .mantine-Text-root {
+  color: #8fa2b3 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px;
+  padding: 12px 16px 8px !important;
+}
+
+/* Bottom Section */
+.navbar-bottom {
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+}
+
+.bottom-item .nav-item-content {
+  padding: 8px 12px;
+}
+
+/* Theme Toggle */
+.theme-toggle {
+  margin: 16px 0;
+}
+
+.theme-toggle .mantine-Button-group {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.theme-btn {
+  flex: 1 !important;
+  background: transparent !important;
+  border: none !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-size: 12px !important;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+.theme-btn[data-variant="filled"] {
+  background: rgba(103, 126, 234, 0.2) !important;
+  color: white !important;
+}
+
+.theme-label {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* User Profile */
+.user-profile {
+  margin-top: 16px;
+}
+
+.profile-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.profile-section:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.profile-avatar {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-name {
+  color: white !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.profile-email {
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-size: 11px !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-menu {
+  color: rgba(255, 255, 255, 0.4) !important;
+  background: transparent !important;
+  border: none !important;
+  min-width: 20px !important;
+  height: 20px !important;
+}
+
+.profile-dropdown {
+  background: white !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Main Content */
+.main-content {
+  padding: 24px;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modern-navbar {
+    width: 100% !important;
+  }
+  
+  .navbar-header {
+    padding: 16px;
+  }
+  
+  .brand-section {
+    margin-bottom: 16px;
+  }
+  
+  .search-section {
+    margin-bottom: 16px;
+  }
+  
+  .navbar-content {
+    padding: 0 12px;
+  }
+  
+  .navbar-bottom {
+    padding: 12px;
+  }
+  
+  .main-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-section {
+    padding: 8px;
+  }
+  
+  .profile-info {
+    display: none;
+  }
+  
+  .brand-name {
+    display: none;
+  }
+  
+  .nav-label {
+    font-size: 13px;
+  }
+  
+  .search-field {
+    font-size: 13px;
+    padding: 6px 10px 6px 32px;
+  }
+}
+
+/* Active badge animation */
+.nav-badge {
+  animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Smooth transitions for all elements */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar for webkit browsers */
+.navbar-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.navbar-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.navbar-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.navbar-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Enhanced text visibility */
+.nav-item * {
+  color: inherit !important;
+}
+
+.nav-item span,
+.nav-item .nav-label {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+}
+
+.nav-item:hover span,
+.nav-item:hover .nav-label {
+  color: white !important;
+}
+
+.nav-item.active span,
+.nav-item.active .nav-label {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+/* Focus states for accessibility */
+.nav-item:focus-visible .nav-item-content {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+.search-field:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+.profile-section:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}

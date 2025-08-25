@@ -241,19 +241,19 @@ export default function SecurityDeposits() {
   const [deductionReason, setDeductionReason] = useState<string>("");
   const [damageReport, setDamageReport] = useState<string>("");
 
-  // Auto-calculate deduction amount when refund amount changes
+  // Auto-calculate refund amount when deduction amount changes
   useEffect(() => {
-    if (selectedDeposit && refundAmount >= 0) {
-      const calculatedDeduction = selectedDeposit.amount - refundAmount;
-      setDeductionAmount(Math.max(0, calculatedDeduction));
+    if (selectedDeposit && deductionAmount >= 0) {
+      const calculatedRefund = selectedDeposit.amount - deductionAmount;
+      setRefundAmount(Math.max(0, calculatedRefund));
     }
-  }, [refundAmount, selectedDeposit]);
+  }, [deductionAmount, selectedDeposit]);
 
   // Reset form when modal opens/closes
   useEffect(() => {
     if (selectedDeposit && refundOpened) {
-      setRefundAmount(selectedDeposit.amount);
       setDeductionAmount(0);
+      setRefundAmount(selectedDeposit.amount);
       setDeductionReason("");
       setDamageReport("");
     }
@@ -684,18 +684,16 @@ export default function SecurityDeposits() {
                   </Text>
                 </Alert>
 
-                <NumberInput
-                  label="Refund Amount"
-                  placeholder="Enter refund amount"
-                  value={refundAmount}
-                  onChange={(value) => setRefundAmount(Number(value) || 0)}
-                  min={0}
-                  max={selectedDeposit.amount}
-                  step={0.01}
-                  required
-                  leftSection="₵"
-                  description="Enter the amount to be refunded to the guest"
-                />
+                {/* Refund Amount Display */}
+                <div>
+                  <Text size="sm" fw={500} mb={4}>Refund Amount (Auto-calculated)</Text>
+                  <Text size="lg" fw={700} c={refundAmount > 0 ? "green" : "red"}>
+                    ₵{refundAmount.toLocaleString()}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Automatically calculated: ₵{selectedDeposit.amount.toLocaleString()} - ₵{deductionAmount.toLocaleString()} = ₵{refundAmount.toLocaleString()}
+                  </Text>
+                </div>
 
                 {/* Quick Action Buttons */}
                 <Group gap="xs" wrap="wrap">
@@ -704,7 +702,7 @@ export default function SecurityDeposits() {
                     size="xs"
                     variant="light"
                     color="green"
-                    onClick={() => setRefundAmount(selectedDeposit.amount)}
+                    onClick={() => setDeductionAmount(0)}
                   >
                     Full Refund
                   </Button>
@@ -712,42 +710,38 @@ export default function SecurityDeposits() {
                     size="xs"
                     variant="light"
                     color="orange"
-                    onClick={() => setRefundAmount(selectedDeposit.amount * 0.8)}
+                    onClick={() => setDeductionAmount(selectedDeposit.amount * 0.2)}
                   >
-                    80% Refund
+                    20% Deduction
                   </Button>
                   <Button
                     size="xs"
                     variant="light"
                     color="orange"
-                    onClick={() => setRefundAmount(selectedDeposit.amount * 0.5)}
+                    onClick={() => setDeductionAmount(selectedDeposit.amount * 0.5)}
                   >
-                    50% Refund
+                    50% Deduction
                   </Button>
                   <Button
                     size="xs"
                     variant="light"
                     color="red"
-                    onClick={() => setRefundAmount(0)}
+                    onClick={() => setDeductionAmount(selectedDeposit.amount)}
                   >
-                    No Refund
+                    Full Forfeit
                   </Button>
                 </Group>
 
                 <NumberInput
-                  label="Deduction Amount (Auto-calculated)"
-                  placeholder="Automatically calculated"
+                  label="Deduction Amount"
+                  placeholder="Enter deduction amount"
                   value={deductionAmount}
-                  onChange={(value) => {
-                    const newDeduction = Number(value) || 0;
-                    setDeductionAmount(newDeduction);
-                    setRefundAmount(selectedDeposit.amount - newDeduction);
-                  }}
+                  onChange={(value) => setDeductionAmount(Number(value) || 0)}
                   min={0}
                   max={selectedDeposit.amount}
                   step={0.01}
                   leftSection="₵"
-                  description={`Automatically calculated: ₵${selectedDeposit.amount.toLocaleString()} - ₵${refundAmount.toLocaleString()} = ₵${deductionAmount.toLocaleString()}`}
+                  description="Enter the amount to be deducted from the deposit"
                   error={
                     (refundAmount + deductionAmount !== selectedDeposit.amount) 
                       ? `Total must equal ₵${selectedDeposit.amount.toLocaleString()}` 

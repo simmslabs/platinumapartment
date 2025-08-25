@@ -16,6 +16,7 @@ import "@mantine/notifications/styles.css";
 import "@mantine/dates/styles.css";
 import "@mantine/dropzone/styles.css";
 import "@mantine/spotlight/styles.css";
+import { theme } from "./utils/theme";
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -27,6 +28,18 @@ export const links: LinksFunction = () => [
   {
     rel: "stylesheet",
     href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+  },
+  {
+    rel: "stylesheet",
+    href: "/styles/modern-design.css",
+  },
+  {
+    rel: "stylesheet",
+    href: "/styles/monitoring-dashboard.css",
+  },
+  {
+    rel: "stylesheet",
+    href: "/styles/modern-navbar.css",
   },
 ];
 
@@ -42,10 +55,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <MantineProvider
-          theme={{
-            primaryColor: "blue",
-            fontFamily: "Inter, sans-serif",
-          }}
+          theme={theme}
           defaultColorScheme="auto"
         >
           <ModalsProvider>
