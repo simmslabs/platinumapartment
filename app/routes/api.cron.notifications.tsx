@@ -46,6 +46,7 @@ export async function action({ request }: ActionFunctionArgs) {
       emailsSent: 0,
       smsSent: 0,
       staffNotified: 0,
+      notifiedGuests: [] as Array<{ name: string; room: string }>,
       errors: [] as string[],
     };
 
@@ -187,6 +188,12 @@ export async function action({ request }: ActionFunctionArgs) {
                 status: "SENT",
               },
             });
+
+            // Track guest who received notification
+            results.notifiedGuests.push({
+              name: guestName,
+              room: roomNumber,
+            });
           }
         }
       } catch (bookingError) {
@@ -196,9 +203,8 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    // Send summary notifications to all staff users
-    if (results.processed > 0) {
-      try {
+    // Send summary notifications to all staff users (always send, even if no guests were notified)
+    try {
         // Get all staff users (admins, managers, staff)
         const staffUsers = await db.user.findMany({
           where: {
@@ -214,23 +220,14 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         });
 
-        // Create a list of guests who reached 75% completion
-        const guestSummary = activeBookings
-          .filter(booking => {
-            const checkInDate = new Date(booking.checkIn);
-            const checkOutDate = new Date(booking.checkOut);
-            const totalStayDuration = checkOutDate.getTime() - checkInDate.getTime();
-            const seventyFivePercentDuration = totalStayDuration * 0.75;
-            const seventyFivePercentDate = new Date(checkInDate.getTime() + seventyFivePercentDuration);
-            const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-            const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-            
-            return isAfter(seventyFivePercentDate, twoHoursAgo) && isBefore(seventyFivePercentDate, twoHoursFromNow);
-          })
-          .map(booking => `${booking.user.firstName} ${booking.user.lastName} (Room ${booking.room.number})`)
+        // Create a list of guests who actually received notifications
+        const notifiedGuestsList = results.notifiedGuests
+          .map(guest => `${guest.name} (Room ${guest.room})`)
           .join(", ");
 
-        const summaryMessage = `🏨 Platinum Apartment Alert: ${results.processed} guest(s) reached 75% stay completion. Guests: ${guestSummary}. Notifications sent: ${results.emailsSent} emails, ${results.smsSent} SMS.`;
+        const summaryMessage = results.notifiedGuests.length > 0 
+          ? `🏨 Platinum Apartment Alert: ${results.notifiedGuests.length} guest(s) received 75% stay completion notifications. Guests notified: ${notifiedGuestsList}. Sent: ${results.emailsSent} emails, ${results.smsSent} SMS.`
+          : `🏨 Platinum Apartment: No guests required 75% stay completion notifications at this time.`;
 
         // Send SMS to all staff members
         for (const staff of staffUsers) {
@@ -260,7 +257,6 @@ export async function action({ request }: ActionFunctionArgs) {
         const errorMessage = staffError instanceof Error ? staffError.message : String(staffError);
         results.errors.push(`Staff notifications error: ${errorMessage}`);
       }
-    }
 
     return json({
       success: true,
