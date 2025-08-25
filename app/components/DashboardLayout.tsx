@@ -115,7 +115,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
-        <AppShell.Section grow>
+        <AppShell.Section grow style={{ overflowY: 'auto', maxHeight: '100%' }}>
           {filteredNavigation.map((item) => (
             <NavLink
               key={item.label}
