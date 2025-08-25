@@ -107,14 +107,13 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     if (intent === "create") {
       const email = formData.get("email") as string;
-      const password = formData.get("password") as string;
       const firstName = formData.get("firstName") as string;
       const lastName = formData.get("lastName") as string;
       const phone = formData.get("phone") as string;
       const address = formData.get("address") as string;
 
-      if (!email || !password || !firstName || !lastName) {
-        return json({ error: "All required fields must be filled" }, { status: 400 });
+      if (!email || !firstName || !lastName) {
+        return json({ error: "Email, first name, and last name are required" }, { status: 400 });
       }
 
       // Check if email already exists
@@ -123,8 +122,20 @@ export async function action({ request }: ActionFunctionArgs) {
         return json({ error: "A user with this email already exists" }, { status: 400 });
       }
 
+      // Generate a random temporary password
+      const generatePassword = () => {
+        const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+        let password = '';
+        for (let i = 0; i < 8; i++) {
+          password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return password;
+      };
+
+      const temporaryPassword = generatePassword();
+
       // Hash the password
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
       // Create the user
       const newUser = await db.user.create({
@@ -145,7 +156,7 @@ export async function action({ request }: ActionFunctionArgs) {
           firstName,
           lastName,
           email,
-          temporaryPassword: password, // Send the original password in the email
+          temporaryPassword: temporaryPassword, // Send the generated password in the email
         });
         console.log(`Welcome email sent to ${email}`);
       } catch (emailError) {
@@ -153,7 +164,7 @@ export async function action({ request }: ActionFunctionArgs) {
         // Don't fail the user creation if email fails
       }
 
-      return json({ success: "Guest created successfully and welcome email sent!" });
+      return json({ success: "Guest created successfully with auto-generated password sent via email!" });
     }
 
     if (intent === "update") {
@@ -639,14 +650,6 @@ export default function Guests() {
                 />
 
                 <TextInput
-                  label="Password"
-                  placeholder="Enter password"
-                  name="password"
-                  type="password"
-                  required
-                />
-
-                <TextInput
                   label="Phone"
                   placeholder="+1234567890"
                   name="phone"
@@ -736,7 +739,9 @@ export default function Guests() {
                 <Text size="sm" mt="xs">
                   Required columns: firstName, lastName, email
                   <br />
-                  Optional columns: password, phone, address
+                  Optional columns: phone, address
+                  <br />
+                  <Text size="xs" c="dimmed">Note: Passwords will be auto-generated and sent via email</Text>
                 </Text>
               </Alert>
 

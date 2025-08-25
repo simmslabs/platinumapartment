@@ -51,9 +51,20 @@ export async function action({ request }: ActionFunctionArgs) {
           const firstName = row.firstName || row.FirstName || row.first_name || row['First Name'];
           const lastName = row.lastName || row.LastName || row.last_name || row['Last Name'];
           const email = row.email || row.Email || row.EMAIL;
-          const password = row.password || row.Password || 'TempPass123!'; // Default password if not provided
           const phone = row.phone || row.Phone || row.PHONE || null;
           const address = row.address || row.Address || row.ADDRESS || null;
+
+          // Generate a random temporary password
+          const generatePassword = () => {
+            const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+            let password = '';
+            for (let i = 0; i < 8; i++) {
+              password += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return password;
+          };
+
+          const temporaryPassword = generatePassword();
 
           if (!firstName || !lastName || !email) {
             results.errors.push(`Row ${i + 1}: Missing required fields (firstName, lastName, email)`);
@@ -75,7 +86,7 @@ export async function action({ request }: ActionFunctionArgs) {
           }
 
           // Hash the password
-          const hashedPassword = await bcrypt.hash(password, 10);
+          const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
           // Create the user
           const newUser = await db.user.create({
@@ -101,7 +112,7 @@ export async function action({ request }: ActionFunctionArgs) {
             firstName,
             lastName,
             email,
-            temporaryPassword: password,
+            temporaryPassword: temporaryPassword,
           }).catch(error => {
             console.error(`Failed to send welcome email to ${email}:`, error);
           });
@@ -133,7 +144,6 @@ export async function action({ request }: ActionFunctionArgs) {
           firstName: "John",
           lastName: "Doe",
           email: "john.doe@example.com",
-          password: "TempPass123!",
           phone: "+1234567890",
           address: "123 Main Street, City, State"
         },
@@ -141,7 +151,6 @@ export async function action({ request }: ActionFunctionArgs) {
           firstName: "Jane",
           lastName: "Smith",
           email: "jane.smith@example.com", 
-          password: "TempPass456!",
           phone: "+0987654321",
           address: "456 Oak Avenue, City, State"
         }
@@ -156,7 +165,6 @@ export async function action({ request }: ActionFunctionArgs) {
         { wch: 15 }, // firstName
         { wch: 15 }, // lastName  
         { wch: 25 }, // email
-        { wch: 15 }, // password
         { wch: 15 }, // phone
         { wch: 30 }, // address
       ];

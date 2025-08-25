@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useNavigate, Outlet, useLocation } from "@remix-run/react";
 import {
   Title,
   SimpleGrid,
@@ -235,11 +235,13 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function Rooms() {
   const { user, rooms, blocks } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const navigate = useNavigate();
   const [opened, { open, close }] = useDisclosure(false);
   const [blockModalOpened, { open: openBlockModal, close: closeBlockModal }] = useDisclosure(false);
   const [editingBlock, setEditingBlock] = useState<string | null>(null);
   const [deletingBlock, setDeletingBlock] = useState<string | null>(null);
   const [creatingBlock, setCreatingBlock] = useState(false);
+  const location = useLocation();
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -394,16 +396,23 @@ export default function Rooms() {
   // Group rooms by blocks for better organization
   const roomsByBlock = useMemo(() => {
     const grouped = filteredRooms.reduce((acc, room) => {
-      if (!acc[room.block]) {
-        acc[room.block] = [];
+      const blockKey = room.blockRelation?.id || room.block;
+      const blockName = room.blockRelation?.name || room.block;
+      
+      if (!acc[blockKey]) {
+        acc[blockKey] = {
+          name: blockName,
+          id: room.blockRelation?.id,
+          rooms: [],
+        };
       }
-      acc[room.block].push(room);
+      acc[blockKey].rooms.push(room);
       return acc;
-    }, {} as Record<string, typeof filteredRooms>);
+    }, {} as Record<string, { name: string; id?: string; rooms: typeof filteredRooms }>);
     
     // Sort rooms within each block by room number
-    Object.keys(grouped).forEach(block => {
-      grouped[block].sort((a, b) => a.number.localeCompare(b.number));
+    Object.keys(grouped).forEach(blockKey => {
+      grouped[blockKey].rooms.sort((a, b) => a.number.localeCompare(b.number));
     });
     
     return grouped;
@@ -423,6 +432,8 @@ export default function Rooms() {
         return "gray";
     }
   };
+
+  if(location.pathname !== "/dashboard/rooms") return <Outlet />
 
   return (
     <DashboardLayout user={user}>
@@ -644,19 +655,48 @@ export default function Rooms() {
         ) : (
           <Stack gap="xl">
             {Object.entries(roomsByBlock)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([block, blockRooms]) => (
-              <div key={block}>
-                <Group mb="md">
-                  <Title order={3} c="blue">Block {block}</Title>
-                  <Badge variant="light" color="blue" size="lg">
-                    {blockRooms.length} room{blockRooms.length !== 1 ? 's' : ''}
-                  </Badge>
-                </Group>
+              .sort(([, blockA], [, blockB]) => blockA.name.localeCompare(blockB.name))
+              .map(([blockKey, blockData]) => (
+              <div key={blockKey}>
+                <Card
+                  shadow="sm"
+                  p="md"
+                  mb="md"
+                  style={{ 
+                    cursor: blockData.id ? 'pointer' : 'default',
+                    '&:hover': blockData.id ? { boxShadow: '0 2px 8px rgba(0,0,0,0.1)' } : {}
+                  }}
+                  onClick={() => {
+                    if (blockData.id) {
+                      navigate(`/dashboard/blocks/${blockData.id}`);
+                    }
+                  }}
+                >
+                  <Group justify="space-between">
+                    <Group>
+                      <Title order={3} c="blue">Block {blockData.name}</Title>
+                      <Badge variant="light" color="blue" size="lg">
+                        {blockData.rooms.length} room{blockData.rooms.length !== 1 ? 's' : ''}
+                      </Badge>
+                    </Group>
+                    {blockData.id && (
+                      <Text size="sm" c="dimmed">
+                        Click to view details →
+                      </Text>
+                    )}
+                  </Group>
+                </Card>
                 
                 <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-                  {blockRooms.map((room) => (
-                    <Card key={room.id} shadow="sm" p="lg" h="100%">
+                  {blockData.rooms.map((room) => (
+                    <Card 
+                      key={room.id} 
+                      shadow="sm" 
+                      p="lg" 
+                      h="100%" 
+                      style={{ cursor: 'pointer', '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.15)' } }}
+                      onClick={() => navigate(`/dashboard/rooms/${room.id}`)}
+                    >
                         <Group justify="space-between" mb="md">
                           <Text fw={600} size="lg">
                             Room {room.number}
@@ -689,34 +729,44 @@ export default function Rooms() {
                           )}
                         </Stack>
 
-                        {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
-                          <Form method="post" style={{ marginTop: "1rem" }}>
-                            <input type="hidden" name="intent" value="update-status" />
-                            <input type="hidden" name="roomId" value={room.id} />
-                            <Select
-                              name="status"
-                              data={[
-                                { value: "AVAILABLE", label: "Available" },
-                                { value: "OCCUPIED", label: "Occupied" },
-                                { value: "MAINTENANCE", label: "Maintenance" },
-                                { value: "OUT_OF_ORDER", label: "Out of Order" },
-                              ]}
-                              defaultValue={room.status}
-                              onChange={(value) => {
-                                if (value) {
-                                  const form = new FormData();
-                                  form.append("intent", "update-status");
-                                  form.append("roomId", room.id);
-                                  form.append("status", value);
-                                  fetch("/dashboard/rooms", {
-                                    method: "POST",
-                                    body: form,
-                                  }).then(() => window.location.reload());
-                                }
-                              }}
-                            />
-                          </Form>
-                        )}
+                        <Group justify="space-between" mt="md">
+                          <Button size="xs" variant="light" onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/dashboard/rooms/${room.id}`);
+                          }}>
+                            View Details
+                          </Button>
+                          
+                          {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
+                            <Form method="post" onClick={(e) => e.stopPropagation()}>
+                              <input type="hidden" name="intent" value="update-status" />
+                              <input type="hidden" name="roomId" value={room.id} />
+                              <Select
+                                size="xs"
+                                name="status"
+                                data={[
+                                  { value: "AVAILABLE", label: "Available" },
+                                  { value: "OCCUPIED", label: "Occupied" },
+                                  { value: "MAINTENANCE", label: "Maintenance" },
+                                  { value: "OUT_OF_ORDER", label: "Out of Order" },
+                                ]}
+                                defaultValue={room.status}
+                                onChange={(value) => {
+                                  if (value) {
+                                    const form = new FormData();
+                                    form.append("intent", "update-status");
+                                    form.append("roomId", room.id);
+                                    form.append("status", value);
+                                    fetch("/dashboard/rooms", {
+                                      method: "POST",
+                                      body: form,
+                                    }).then(() => window.location.reload());
+                                  }
+                                }}
+                              />
+                            </Form>
+                          )}
+                        </Group>
                       </Card>
                   ))}
                 </SimpleGrid>
