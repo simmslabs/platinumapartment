@@ -92,10 +92,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Get room type distribution for donut chart
   const roomTypes = await db.room.groupBy({
-    by: ['type'],
+    by: ['typeId'],
     _count: {
       id: true,
     },
+  });
+
+  // Get room type details for chart labels
+  const roomTypeDetails = await db.roomType.findMany({
+    where: {
+      id: {
+        in: roomTypes.map(rt => rt.typeId)
+      }
+    }
   });
 
   // Get last 7 days booking activity for area chart
@@ -151,14 +160,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       criticalCheckouts,
     },
     chartData: {
-      roomTypes: roomTypes.map(rt => ({
-        name: rt.type.replace('_', ' '),
-        value: rt._count.id,
-        color: rt.type === 'STUDIO' ? '#1c7ed6' : 
-               rt.type === 'ONE_BEDROOM' ? '#37b24d' :
-               rt.type === 'TWO_BEDROOM' ? '#f59f00' :
-               rt.type === 'THREE_BEDROOM' ? '#e03131' : '#868e96'
-      })),
+      roomTypes: roomTypes.map(rt => {
+        const typeDetail = roomTypeDetails.find(td => td.id === rt.typeId);
+        return {
+          name: typeDetail?.displayName || 'Unknown',
+          value: rt._count?.id || 0,
+          color: typeDetail?.name.includes('ONE_BEDROOM') ? '#37b24d' :
+                 typeDetail?.name.includes('TWO_BEDROOM') ? '#f59f00' :
+                 typeDetail?.name.includes('STANDARD') ? '#1c7ed6' : 
+                 typeDetail?.name.includes('SPECIAL') ? '#e03131' : '#868e96'
+        };
+      }),
       weeklyActivity,
     },
   });

@@ -2,9 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import modern design system */
-@import url('./styles/modern-design.css');
-
 html,
 body {
   @apply bg-white dark:bg-gray-950;
