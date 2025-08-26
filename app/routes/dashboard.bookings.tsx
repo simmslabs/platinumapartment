@@ -15,9 +15,12 @@ import {
   TextInput,
   ActionIcon,
   Menu,
+  Modal,
+  List,
 } from "@mantine/core";
-import { IconPlus, IconInfoCircle, IconTrash, IconSearch, IconDots, IconEye } from "@tabler/icons-react";
+import { IconPlus, IconInfoCircle, IconTrash, IconSearch, IconDots, IconEye, IconAlertTriangle, IconCheck, IconX } from "@tabler/icons-react";
 import { format } from "date-fns";
+import { useDisclosure } from "@mantine/hooks";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -25,6 +28,31 @@ import type { Booking, BookingStatus, RoomStatus } from "@prisma/client";
 import { emailService } from "~/utils/email.server";
 import { mnotifyService } from "~/utils/mnotify.server";
 import { useState, useMemo } from "react";
+
+// Type for booking with related data (matching the loader query)
+type BookingWithRelations = Booking & {
+  user: { 
+    firstName: string; 
+    lastName: string; 
+    email: string; 
+    phone: string | null; 
+  };
+  room: { 
+    number: string; 
+    type: string; 
+    block: string; 
+    pricingPeriod: string; 
+    pricePerNight: number; 
+  };
+  payment?: { 
+    id: string; 
+    amount: number; 
+    status: string; 
+    method: string; 
+    paidAt: Date | null; 
+    transactionId: string | null; 
+  } | null;
+};
 
 export const meta: MetaFunction = () => {
   return [
@@ -96,6 +124,15 @@ export async function action({ request }: ActionFunctionArgs) {
   await requireUserId(request);
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
+
+  // SMS NOTIFICATIONS: All booking actions now send SMS notifications to guests AND admins
+  // This feature requires:
+  // 1. MNOTIFY_API_KEY environment variable
+  // 2. MNOTIFY_SENDER_ID environment variable  
+  // 3. ADMIN_PHONE_NUMBER environment variable for admin alerts
+  // 4. Guest must have a valid phone number in their profile
+  // 
+  // Admin gets notified for: New bookings, Status changes, Deletions, Restorations
 
   try {
     if (intent === "create") {
@@ -201,7 +238,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       console.log("Booking created successfully:", newBooking.id);
 
-      // Send booking confirmation email (don't block the response if email fails)
+      // Send booking confirmation email and SMS (don't block the response if email/SMS fails)
       try {
         await emailService.sendBookingConfirmation({
           firstName: user.firstName,
@@ -217,6 +254,42 @@ export async function action({ request }: ActionFunctionArgs) {
       } catch (emailError) {
         console.error(`Failed to send booking confirmation to ${user.email}:`, emailError);
         // Don't fail the booking if email fails
+      }
+
+      // Send SMS notification for new booking creation
+      try {
+        if (user.phone) {
+          const roomNumber = (await db.room.findUnique({ where: { id: roomId } }))?.number || '';
+          await mnotifyService.sendNewBookingAlert(
+            user.phone,
+            `${user.firstName} ${user.lastName}`,
+            roomNumber,
+            checkIn.toLocaleDateString(),
+            finalCheckOut.toLocaleDateString(),
+            newBooking.id
+          );
+          console.log(`New booking SMS sent to guest: ${user.phone}`);
+        }
+
+        // Send SMS alert to admin/manager for new booking
+        const adminPhone = process.env.ADMIN_PHONE_NUMBER;
+        if (adminPhone) {
+          const roomNumber = (await db.room.findUnique({ where: { id: roomId } }))?.number || '';
+          await mnotifyService.sendNewBookingAdminAlert(
+            adminPhone,
+            `${user.firstName} ${user.lastName}`,
+            roomNumber,
+            checkIn.toLocaleDateString(),
+            finalCheckOut.toLocaleDateString(),
+            newBooking.id,
+            totalAmount,
+            guests
+          );
+          console.log(`New booking admin alert sent to: ${adminPhone}`);
+        }
+      } catch (smsError) {
+        console.error("Failed to send new booking SMS:", smsError);
+        // Don't fail the booking if SMS fails
       }
 
       return json({ 
@@ -260,47 +333,97 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      // Send SMS notifications when booking is confirmed
-      // This feature requires:
-      // 1. MNOTIFY_API_KEY environment variable
-      // 2. MNOTIFY_SENDER_ID environment variable  
-      // 3. ADMIN_PHONE_NUMBER environment variable for admin alerts
-      // 4. Guest must have a valid phone number in their profile
-      if (status === "CONFIRMED") {
-        try {
-          const guestName = `${bookingWithDetails.user.firstName} ${bookingWithDetails.user.lastName}`;
-          const roomNumber = bookingWithDetails.room.number;
-          const checkIn = format(new Date(bookingWithDetails.checkIn), "MMM dd, yyyy");
-          const checkOut = format(new Date(bookingWithDetails.checkOut), "MMM dd, yyyy");
+      // Send SMS notifications for all booking status changes
+      try {
+        const guestName = `${bookingWithDetails.user.firstName} ${bookingWithDetails.user.lastName}`;
+        const roomNumber = bookingWithDetails.room.number;
+        const checkIn = format(new Date(bookingWithDetails.checkIn), "MMM dd, yyyy");
+        const checkOut = format(new Date(bookingWithDetails.checkOut), "MMM dd, yyyy");
 
-          // Send SMS to guest (if phone number exists)
-          if (bookingWithDetails.user.phone) {
-            await mnotifyService.sendBookingConfirmation(
-              bookingWithDetails.user.phone,
-              guestName,
-              roomNumber,
-              checkIn,
-              checkOut
-            );
-            console.log(`Booking confirmation SMS sent to guest: ${bookingWithDetails.user.phone}`);
+        // Send SMS to guest for all status changes (if phone number exists)
+        if (bookingWithDetails.user.phone) {
+          let smsMessage = "";
+          switch (status) {
+            case "CONFIRMED":
+              await mnotifyService.sendBookingConfirmation(
+                bookingWithDetails.user.phone,
+                guestName,
+                roomNumber,
+                checkIn,
+                checkOut
+              );
+              smsMessage = "booking confirmation";
+              break;
+            case "CHECKED_IN":
+              await mnotifyService.sendCheckInNotification(
+                bookingWithDetails.user.phone,
+                guestName,
+                roomNumber,
+                checkIn,
+                checkOut
+              );
+              smsMessage = "check-in notification";
+              break;
+            case "CHECKED_OUT":
+              await mnotifyService.sendCheckOutNotification(
+                bookingWithDetails.user.phone,
+                guestName,
+                roomNumber,
+                checkIn,
+                checkOut
+              );
+              smsMessage = "check-out notification";
+              break;
+            case "CANCELLED":
+              await mnotifyService.sendBookingCancellation(
+                bookingWithDetails.user.phone,
+                guestName,
+                roomNumber,
+                checkIn,
+                checkOut
+              );
+              smsMessage = "booking cancellation";
+              break;
+            case "PENDING":
+              await mnotifyService.sendBookingPending(
+                bookingWithDetails.user.phone,
+                guestName,
+                roomNumber,
+                checkIn,
+                checkOut
+              );
+              smsMessage = "booking pending status";
+              break;
+            default:
+              // Generic status update message
+              await mnotifyService.sendStatusUpdate(
+                bookingWithDetails.user.phone,
+                guestName,
+                roomNumber,
+                status,
+                checkIn,
+                checkOut
+              );
+              smsMessage = `status update to ${status}`;
           }
-
-          // Send SMS alert to admin/manager
-          const adminPhone = process.env.ADMIN_PHONE_NUMBER;
-          if (adminPhone) {
-            await mnotifyService.sendStaffAlert(
-              adminPhone,
-              "Admin",
-              "Booking Confirmed",
-              `Booking #${bookingId.slice(-6)} confirmed for ${guestName} in Room ${roomNumber} (${checkIn} - ${checkOut})`
-            );
-            console.log(`Booking confirmation alert sent to admin: ${adminPhone}`);
-          }
-
-        } catch (smsError) {
-          console.error("Failed to send SMS notifications:", smsError);
-          // Don't fail the entire request if SMS fails
+          console.log(`${smsMessage} SMS sent to guest: ${bookingWithDetails.user.phone}`);
         }
+
+        // Send SMS alert to admin/manager for all status changes
+        const adminPhone = process.env.ADMIN_PHONE_NUMBER;
+        if (adminPhone) {
+          await mnotifyService.sendStaffAlert(
+            adminPhone,
+            "Admin",
+            `Booking ${status}`,
+            `Booking #${bookingId.slice(-6)} status changed to ${status} for ${guestName} in Room ${roomNumber} (${checkIn} - ${checkOut})`
+          );
+          console.log(`Booking status alert sent to admin: ${adminPhone}`);
+        }
+
+      } catch (smsError) {
+        console.error("Failed to send SMS notifications:", smsError);
+        // Don't fail the entire request if SMS fails
       }
 
       return json({ success: "Booking status updated successfully" });
@@ -312,7 +435,10 @@ export async function action({ request }: ActionFunctionArgs) {
       // Get booking details before soft deletion
       const booking = await db.booking.findUnique({
         where: { id: bookingId },
-        include: { room: true },
+        include: { 
+          room: true,
+          user: true 
+        },
       });
 
       if (!booking) {
@@ -346,6 +472,41 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
+      // Send SMS notification for booking deletion
+      try {
+        if (booking.user.phone) {
+          const guestName = `${booking.user.firstName} ${booking.user.lastName}`;
+          const roomNumber = booking.room.number;
+          const checkIn = format(new Date(booking.checkIn), "MMM dd, yyyy");
+          const checkOut = format(new Date(booking.checkOut), "MMM dd, yyyy");
+
+          await mnotifyService.sendBookingDeletion(
+            booking.user.phone,
+            guestName,
+            roomNumber,
+            checkIn,
+            checkOut,
+            bookingId
+          );
+          console.log(`Booking deletion SMS sent to guest: ${booking.user.phone}`);
+        }
+
+        // Send SMS alert to admin/manager
+        const adminPhone = process.env.ADMIN_PHONE_NUMBER;
+        if (adminPhone) {
+          await mnotifyService.sendStaffAlert(
+            adminPhone,
+            "Admin",
+            "Booking Deleted",
+            `Booking #${bookingId.slice(-6)} has been deleted for ${booking.user.firstName} ${booking.user.lastName} in Room ${booking.room.number}`
+          );
+          console.log(`Booking deletion alert sent to admin: ${adminPhone}`);
+        }
+      } catch (smsError) {
+        console.error("Failed to send booking deletion SMS:", smsError);
+        // Don't fail the deletion if SMS fails
+      }
+
       return json({ success: "Booking deleted successfully. It can be restored from the deleted bookings view." });
     }
 
@@ -355,7 +516,10 @@ export async function action({ request }: ActionFunctionArgs) {
       // Get booking details
       const booking = await db.booking.findUnique({
         where: { id: bookingId },
-        include: { room: true },
+        include: { 
+          room: true,
+          user: true 
+        },
       });
 
       if (!booking) {
@@ -375,6 +539,41 @@ export async function action({ request }: ActionFunctionArgs) {
           status: "PENDING" // Reset to pending status when restored
         },
       });
+
+      // Send SMS notification for booking restoration
+      try {
+        if (booking.user.phone) {
+          const guestName = `${booking.user.firstName} ${booking.user.lastName}`;
+          const roomNumber = booking.room.number;
+          const checkIn = format(new Date(booking.checkIn), "MMM dd, yyyy");
+          const checkOut = format(new Date(booking.checkOut), "MMM dd, yyyy");
+
+          await mnotifyService.sendBookingRestoration(
+            booking.user.phone,
+            guestName,
+            roomNumber,
+            checkIn,
+            checkOut,
+            bookingId
+          );
+          console.log(`Booking restoration SMS sent to guest: ${booking.user.phone}`);
+        }
+
+        // Send SMS alert to admin/manager
+        const adminPhone = process.env.ADMIN_PHONE_NUMBER;
+        if (adminPhone) {
+          await mnotifyService.sendStaffAlert(
+            adminPhone,
+            "Admin",
+            "Booking Restored",
+            `Booking #${bookingId.slice(-6)} has been restored for ${booking.user.firstName} ${booking.user.lastName} in Room ${booking.room.number}`
+          );
+          console.log(`Booking restoration alert sent to admin: ${adminPhone}`);
+        }
+      } catch (smsError) {
+        console.error("Failed to send booking restoration SMS:", smsError);
+        // Don't fail the restoration if SMS fails
+      }
 
       return json({ success: "Booking restored successfully" });
     }
@@ -426,6 +625,243 @@ export default function Bookings() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const location = useLocation();
+
+  // Confirmation modal state
+  const [confirmationOpened, { open: openConfirmation, close: closeConfirmation }] = useDisclosure(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: string;
+    bookingId: string;
+    booking?: any;
+    newStatus?: string;
+  } | null>(null);
+  const [confirmationText, setConfirmationText] = useState("");
+
+  // Handler functions for different actions
+  const handleStatusChange = (booking: any, newStatus: string) => {
+    setPendingAction({
+      type: "status-change",
+      bookingId: booking.id,
+      booking,
+      newStatus
+    });
+    setConfirmationText("");
+    openConfirmation();
+  };
+
+  const handleDeleteBooking = (booking: any) => {
+    setPendingAction({
+      type: "delete",
+      bookingId: booking.id,
+      booking
+    });
+    setConfirmationText("");
+    openConfirmation();
+  };
+
+  const handleRestoreBooking = (booking: any) => {
+    setPendingAction({
+      type: "restore",
+      bookingId: booking.id,
+      booking
+    });
+    setConfirmationText("");
+    openConfirmation();
+  };
+
+  const handleHardDelete = (booking: any) => {
+    setPendingAction({
+      type: "hard-delete",
+      bookingId: booking.id,
+      booking
+    });
+    setConfirmationText("");
+    openConfirmation();
+  };
+
+  const confirmAction = () => {
+    if (!pendingAction) return;
+
+    // Create and submit form based on action type
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.style.display = 'none';
+
+    const intentInput = document.createElement('input');
+    intentInput.type = 'hidden';
+    intentInput.name = 'intent';
+
+    const bookingIdInput = document.createElement('input');
+    bookingIdInput.type = 'hidden';
+    bookingIdInput.name = 'bookingId';
+    bookingIdInput.value = pendingAction.bookingId;
+
+    if (pendingAction.type === "status-change") {
+      intentInput.value = 'update-status';
+      const statusInput = document.createElement('input');
+      statusInput.type = 'hidden';
+      statusInput.name = 'status';
+      statusInput.value = pendingAction.newStatus || '';
+      form.appendChild(statusInput);
+    } else if (pendingAction.type === "delete") {
+      intentInput.value = 'delete';
+    } else if (pendingAction.type === "restore") {
+      intentInput.value = 'restore';
+    } else if (pendingAction.type === "hard-delete") {
+      intentInput.value = 'hard-delete';
+    }
+
+    form.appendChild(intentInput);
+    form.appendChild(bookingIdInput);
+    document.body.appendChild(form);
+    form.submit();
+
+    closeConfirmation();
+    setPendingAction(null);
+    setConfirmationText("");
+  };
+
+  const getConfirmationConfig = () => {
+    if (!pendingAction) return null;
+
+    const { type, booking, newStatus } = pendingAction;
+
+    switch (type) {
+      case "status-change": {
+        const statusConfig = {
+          "CONFIRMED": {
+            title: "Confirm Booking",
+            color: "green",
+            icon: IconCheck,
+            warning: "This will send SMS notifications to the guest and admin.",
+            consequences: [
+              "Guest will receive booking confirmation SMS",
+              "Admin will be notified of the confirmation",
+              "Room status may be updated",
+              "Payment reminders may be triggered"
+            ],
+            confirmText: "CONFIRM BOOKING",
+            actionText: "Confirm Booking"
+          },
+          "CHECKED_IN": {
+            title: "Check In Guest", 
+            color: "blue",
+            icon: IconCheck,
+            warning: "This will mark the guest as checked in and update room status.",
+            consequences: [
+              "Room status will change to OCCUPIED",
+              "Guest will receive check-in welcome SMS",
+              "Admin will be notified of check-in",
+              "Check-out reminders will be scheduled"
+            ],
+            confirmText: "CHECK IN",
+            actionText: "Check In Guest"
+          },
+          "CHECKED_OUT": {
+            title: "Check Out Guest",
+            color: "gray", 
+            icon: IconCheck,
+            warning: "This will complete the guest's stay and free up the room.",
+            consequences: [
+              "Room status will change to AVAILABLE",
+              "Guest will receive thank you SMS",
+              "Admin will be notified of check-out",
+              "Final billing may be processed"
+            ],
+            confirmText: "CHECK OUT",
+            actionText: "Check Out Guest"
+          },
+          "CANCELLED": {
+            title: "Cancel Booking",
+            color: "red",
+            icon: IconX,
+            warning: "⚠️ This will cancel the booking and may affect revenue.",
+            consequences: [
+              "Booking will be marked as cancelled",
+              "Guest will receive cancellation SMS",
+              "Room will become available again", 
+              "Refund processing may be required"
+            ],
+            confirmText: "CANCEL BOOKING",
+            actionText: "Cancel Booking"
+          },
+          "PENDING": {
+            title: "Set to Pending",
+            color: "yellow",
+            icon: IconAlertTriangle,
+            warning: "This will reset the booking to pending status.",
+            consequences: [
+              "Booking status will change to pending",
+              "Guest will be notified of status change",
+              "Payment confirmation may be required",
+              "Room availability may change"
+            ],
+            confirmText: "SET PENDING",
+            actionText: "Set to Pending"
+          }
+        };
+        return statusConfig[newStatus as keyof typeof statusConfig];
+      }
+
+      case "delete": {
+        return {
+          title: "⚠️ DANGER: Delete Booking",
+          color: "red",
+          icon: IconTrash,
+          warning: "This will soft-delete the booking. It can be restored later.",
+          consequences: [
+            "Booking will be moved to deleted items",
+            "Guest will receive deletion notification SMS",
+            "Room will become available",
+            "Admin will be alerted of deletion",
+            "Booking can be restored from deleted view"
+          ],
+          confirmText: "DELETE BOOKING",
+          actionText: "Delete Booking"
+        };
+      }
+
+      case "restore": {
+        return {
+          title: "Restore Booking",
+          color: "green", 
+          icon: IconCheck,
+          warning: "This will restore the deleted booking to active status.",
+          consequences: [
+            "Booking will be reactivated",
+            "Guest will receive restoration SMS",
+            "Room availability will be updated",
+            "Admin will be notified of restoration"
+          ],
+          confirmText: "RESTORE BOOKING",
+          actionText: "Restore Booking"
+        };
+      }
+
+      case "hard-delete": {
+        return {
+          title: "🔥 PERMANENT DELETE - CANNOT BE UNDONE!",
+          color: "red",
+          icon: IconTrash,
+          warning: "⚠️ DANGER: This will permanently delete the booking from the database!",
+          consequences: [
+            "Booking will be PERMANENTLY removed",
+            "ALL related data will be lost forever",
+            "Payment records may be affected", 
+            "This action CANNOT be undone",
+            "Guest will NOT be notified (booking is gone)"
+          ],
+          confirmText: "PERMANENTLY DELETE",
+          actionText: "Permanently Delete"
+        };
+      }
+
+      default: {
+        return null;
+      }
+    }
+  };
+
+  const config = getConfirmationConfig();
 
   // Filter bookings based on search query and status
   const filteredBookings = useMemo(() => {
@@ -827,15 +1263,8 @@ export default function Bookings() {
                                   ]}
                                   defaultValue={booking.status}
                                   onChange={(value) => {
-                                    if (value) {
-                                      const form = new FormData();
-                                      form.append("intent", "update-status");
-                                      form.append("bookingId", booking.id);
-                                      form.append("status", value);
-                                      fetch("/dashboard/bookings", {
-                                        method: "POST",
-                                        body: form,
-                                      }).then(() => window.location.reload());
+                                    if (value && value !== booking.status) {
+                                      handleStatusChange(booking, value);
                                     }
                                   }}
                                 />
@@ -859,17 +1288,7 @@ export default function Bookings() {
                                 <Menu.Item
                                   color="orange"
                                   leftSection={<IconTrash size={14} />}
-                                  onClick={() => {
-                                    if (confirm("Are you sure you want to delete this booking? It can be restored later.")) {
-                                      const form = new FormData();
-                                      form.append("intent", "delete");
-                                      form.append("bookingId", booking.id);
-                                      fetch("/dashboard/bookings", {
-                                        method: "POST",
-                                        body: form,
-                                      }).then(() => window.location.reload());
-                                    }
-                                  }}
+                                  onClick={() => handleDeleteBooking(booking)}
                                 >
                                   Delete Booking
                                 </Menu.Item>
@@ -880,15 +1299,7 @@ export default function Bookings() {
                               <Menu.Label>Deleted Booking</Menu.Label>
                               <Menu.Item
                                 color="green"
-                                onClick={() => {
-                                  const form = new FormData();
-                                  form.append("intent", "restore");
-                                  form.append("bookingId", booking.id);
-                                  fetch("/dashboard/bookings", {
-                                    method: "POST",
-                                    body: form,
-                                  }).then(() => window.location.reload());
-                                }}
+                                onClick={() => handleRestoreBooking(booking)}
                               >
                                 Restore Booking
                               </Menu.Item>
@@ -897,17 +1308,7 @@ export default function Bookings() {
                                 <Menu.Item
                                   color="red"
                                   leftSection={<IconTrash size={14} />}
-                                  onClick={() => {
-                                    if (confirm("Are you sure you want to PERMANENTLY delete this booking? This action cannot be undone.")) {
-                                      const form = new FormData();
-                                      form.append("intent", "hard-delete");
-                                      form.append("bookingId", booking.id);
-                                      fetch("/dashboard/bookings", {
-                                        method: "POST",
-                                        body: form,
-                                      }).then(() => window.location.reload());
-                                    }
-                                  }}
+                                  onClick={() => handleHardDelete(booking)}
                                 >
                                   Permanently Delete
                                 </Menu.Item>
@@ -925,6 +1326,85 @@ export default function Bookings() {
           </Table>
           </Table.ScrollContainer>
         </Card>
+
+        {/* Confirmation Modal */}
+        <Modal
+          opened={confirmationOpened}
+          onClose={closeConfirmation}
+          title={config?.title || "Confirm Action"}
+          size="lg"
+          centered
+        >
+          {config && (
+            <Stack>
+              <Alert 
+                color={config.color} 
+                icon={<config.icon size={16} />}
+              >
+                <Text fw={500}>{config.warning}</Text>
+                <Text size="sm" mt="xs">
+                  The following will happen:
+                </Text>
+                <List size="sm" mt="xs">
+                  {config.consequences.map((consequence, index) => (
+                    <List.Item key={index}>{consequence}</List.Item>
+                  ))}
+                </List>
+                {config.color === "red" && (
+                  <Text size="sm" mt="xs" fw={500} c="red">
+                    This action will have immediate effects!
+                  </Text>
+                )}
+              </Alert>
+
+              {pendingAction?.booking && (
+                <Card withBorder p="md">
+                  <Group gap="sm">
+                    <div>
+                      <Text fw={500}>
+                        {pendingAction.booking.user.firstName} {pendingAction.booking.user.lastName}
+                      </Text>
+                      <Text size="sm" c="dimmed">
+                        Room {pendingAction.booking.room.number} • {pendingAction.booking.room.type}
+                      </Text>
+                      <Text size="sm" c="dimmed">
+                        {format(new Date(pendingAction.booking.checkIn), "MMM dd, yyyy")} - {format(new Date(pendingAction.booking.checkOut), "MMM dd, yyyy")}
+                      </Text>
+                      <Badge color={getStatusColor(pendingAction.booking.status)} size="sm" mt="xs">
+                        {pendingAction.booking.status.replace("_", " ")}
+                      </Badge>
+                    </div>
+                  </Group>
+                </Card>
+              )}
+
+              <Text size="sm" c={config.color} fw={500}>
+                To confirm this action, type: {config.confirmText}
+              </Text>
+              
+              <TextInput
+                placeholder={`Type '${config.confirmText}' to confirm`}
+                value={confirmationText}
+                onChange={(event) => setConfirmationText(event.currentTarget.value)}
+                error={confirmationText && confirmationText !== config.confirmText ? `Must type exactly '${config.confirmText}'` : null}
+              />
+
+              <Group justify="flex-end">
+                <Button variant="outline" onClick={closeConfirmation}>
+                  Cancel
+                </Button>
+                <Button 
+                  color={config.color}
+                  onClick={confirmAction}
+                  disabled={confirmationText !== config.confirmText}
+                  leftSection={<config.icon size={16} />}
+                >
+                  {config.actionText}
+                </Button>
+              </Group>
+            </Stack>
+          )}
+        </Modal>
       </Stack>
     </DashboardLayout>
   );

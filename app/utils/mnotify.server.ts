@@ -324,6 +324,150 @@ class MNotifyService {
       senderId: process.env.MNOTIFY_SENDER_ID
     });
   }
+
+  // New booking action SMS methods
+  async sendNewBookingAlert(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string,
+    bookingId: string
+  ): Promise<MNotifyResponse> {
+    const message = `Hello ${guestName}! Your booking for Room ${roomNumber} has been created. Check-in: ${checkIn}, Check-out: ${checkOut}. Booking ID: ${bookingId.slice(-8)}. We look forward to hosting you! - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  async sendCheckInNotification(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string
+  ): Promise<MNotifyResponse> {
+    const message = `Welcome ${guestName}! You have successfully checked into Room ${roomNumber}. Your stay is from ${checkIn} to ${checkOut}. Enjoy your stay with us! - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  async sendCheckOutNotification(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string
+  ): Promise<MNotifyResponse> {
+    const message = `Thank you ${guestName}! You have successfully checked out from Room ${roomNumber}. We hope you enjoyed your stay from ${checkIn} to ${checkOut}. Welcome back anytime! - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  async sendBookingCancellation(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string
+  ): Promise<MNotifyResponse> {
+    const message = `Hi ${guestName}, your booking for Room ${roomNumber} (${checkIn} - ${checkOut}) has been cancelled. If you need assistance with rebooking, please contact us. - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  async sendBookingPending(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string
+  ): Promise<MNotifyResponse> {
+    const message = `Hello ${guestName}, your booking for Room ${roomNumber} (${checkIn} - ${checkOut}) is currently pending. We'll update you once it's confirmed. - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  async sendStatusUpdate(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    status: string,
+    checkIn: string,
+    checkOut: string
+  ): Promise<MNotifyResponse> {
+    const message = `Hi ${guestName}, your booking status for Room ${roomNumber} (${checkIn} - ${checkOut}) has been updated to: ${status.replace('_', ' ')}. - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  async sendBookingDeletion(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string,
+    bookingId: string
+  ): Promise<MNotifyResponse> {
+    const message = `Hi ${guestName}, your booking #${bookingId.slice(-8)} for Room ${roomNumber} (${checkIn} - ${checkOut}) has been removed from our system. Contact us if you need assistance. - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  async sendBookingRestoration(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string,
+    bookingId: string
+  ): Promise<MNotifyResponse> {
+    const message = `Good news ${guestName}! Your booking #${bookingId.slice(-8)} for Room ${roomNumber} (${checkIn} - ${checkOut}) has been restored and is now active again. - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  // Admin notification for new bookings
+  async sendNewBookingAdminAlert(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    checkIn: string,
+    checkOut: string,
+    bookingId: string,
+    totalAmount: number,
+    guests: number
+  ): Promise<MNotifyResponse> {
+    const message = `NEW BOOKING: ${guestName} booked Room ${roomNumber} for ${guests} guest(s). ${checkIn} - ${checkOut}. Amount: ₵${totalAmount}. Booking: #${bookingId.slice(-8)}. Collect ₵200 security deposit. - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
 }
 
 // Export singleton instance

@@ -194,23 +194,64 @@ export async function action({ request }: ActionFunctionArgs) {
     if (intent === "delete") {
       const guestId = formData.get("guestId") as string;
 
-      // Check if guest has any active bookings
-      const activeBookings = await db.booking.findMany({
-        where: {
-          userId: guestId,
-          status: { in: ["CONFIRMED", "CHECKED_IN"] },
-        },
-      });
+      try {
+        // Force delete guest with proper cascade deletion
+        // Use transaction to ensure all related data is deleted in correct order
+        await db.$transaction(async (tx) => {
+          // First, delete all payments related to this guest's bookings
+          await tx.payment.deleteMany({
+            where: {
+              booking: {
+                userId: guestId
+              }
+            }
+          });
 
-      if (activeBookings.length > 0) {
-        return json({ error: "Cannot delete guest with active bookings" }, { status: 400 });
+          // Delete all transactions related to this guest's bookings
+          await tx.transaction.deleteMany({
+            where: {
+              booking: {
+                userId: guestId
+              }
+            }
+          });
+
+          // Delete all receipts related to this guest's bookings
+          await tx.receipt.deleteMany({
+            where: {
+              booking: {
+                userId: guestId
+              }
+            }
+          });
+
+          // Delete all security deposits related to this guest's bookings
+          await tx.securityDeposit.deleteMany({
+            where: {
+              booking: {
+                userId: guestId
+              }
+            }
+          });
+
+          // Delete all bookings for this guest
+          await tx.booking.deleteMany({
+            where: {
+              userId: guestId
+            }
+          });
+
+          // Finally, delete the guest
+          await tx.user.delete({
+            where: { id: guestId }
+          });
+        });
+
+        return json({ success: "Guest and all related data deleted successfully" });
+      } catch (deleteError) {
+        console.error("Error deleting guest:", deleteError);
+        return json({ error: "Failed to delete guest. Please try again or contact support." }, { status: 500 });
       }
-
-      await db.user.delete({
-        where: { id: guestId },
-      });
-
-      return json({ success: "Guest deleted successfully" });
     }
 
     if (intent === "import") {
@@ -260,6 +301,9 @@ export default function Guests() {
   const actionData = useActionData<typeof action>();
   const location = useLocation();
   const [importOpened, { open: openImport, close: closeImport }] = useDisclosure(false);
+  const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [guestToDelete, setGuestToDelete] = useState<typeof guests[0] | null>(null);
+  const [confirmationText, setConfirmationText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -282,6 +326,40 @@ export default function Guests() {
 
     return filtered;
   }, [guests, searchQuery, filterStatus]);
+
+  const handleDeleteGuest = (guest: typeof guests[0]) => {
+    setGuestToDelete(guest);
+    setConfirmationText("");
+    openDeleteModal();
+  };
+
+  const confirmDelete = () => {
+    if (guestToDelete && confirmationText === "FORCE DELETE") {
+      // Create a form and submit it
+      const form = document.createElement('form');
+      form.method = 'post';
+      form.style.display = 'none';
+      
+      const intentInput = document.createElement('input');
+      intentInput.type = 'hidden';
+      intentInput.name = 'intent';
+      intentInput.value = 'delete';
+      
+      const guestIdInput = document.createElement('input');
+      guestIdInput.type = 'hidden';
+      guestIdInput.name = 'guestId';
+      guestIdInput.value = guestToDelete.id;
+      
+      form.appendChild(intentInput);
+      form.appendChild(guestIdInput);
+      document.body.appendChild(form);
+      form.submit();
+      
+      closeDeleteModal();
+      setGuestToDelete(null);
+      setConfirmationText("");
+    }
+  };
 
   const handleDownloadTemplate = async () => {
     try {
@@ -602,22 +680,13 @@ export default function Guests() {
                           >
                             <IconEdit size={16} />
                           </ActionIcon>
-                          <Form method="post" style={{ display: "inline" }}>
-                            <input type="hidden" name="intent" value="delete" />
-                            <input type="hidden" name="guestId" value={guest.id} />
-                            <ActionIcon
-                              variant="subtle"
-                              color="red"
-                              type="submit"
-                              onClick={(e) => {
-                                if (!confirm("Are you sure you want to delete this guest?")) {
-                                  e.preventDefault();
-                                }
-                              }}
-                            >
-                              <IconTrash size={16} />
-                            </ActionIcon>
-                          </Form>
+                          <ActionIcon
+                            variant="subtle"
+                            color="red"
+                            onClick={() => handleDeleteGuest(guest)}
+                          >
+                            <IconTrash size={16} />
+                          </ActionIcon>
                         </Group>
                       </Table.Td>
                     )}
@@ -628,6 +697,96 @@ export default function Guests() {
             </Table>
             </Table.ScrollContainer>
           </Card>
+
+          {/* Delete Confirmation Modal */}
+          <Modal 
+            opened={deleteModalOpened} 
+            onClose={closeDeleteModal} 
+            title="Force Delete Guest" 
+            size="md"
+            centered
+          >
+            <Stack>
+              <Alert color="red" icon={<IconInfoCircle size={16} />}>
+                <Text fw={500}>⚠️ DANGER: Force Delete Operation!</Text>
+                <Text size="sm" mt="xs">
+                  This will permanently delete the guest and ALL associated data including:
+                </Text>
+                <List size="sm" mt="xs">
+                  <List.Item>All bookings (active and completed)</List.Item>
+                  <List.Item>All payment records and transactions</List.Item>
+                  <List.Item>All receipts and financial history</List.Item>
+                  <List.Item>All security deposits</List.Item>
+                  <List.Item>Guest profile and personal data</List.Item>
+                </List>
+                <Text size="sm" mt="xs" fw={500} c="red">
+                  This operation uses cascade deletion to ensure data integrity. This action cannot be undone!
+                </Text>
+              </Alert>
+
+              {guestToDelete && (
+                <Card withBorder p="md">
+                  <Group gap="sm">
+                    {guestToDelete.profilePicture ? (
+                      <Avatar 
+                        src={guestToDelete.profilePicture} 
+                        size="md" 
+                        radius="sm"
+                        alt={`${guestToDelete.firstName} ${guestToDelete.lastName}`}
+                      />
+                    ) : (
+                      <Avatar size="md" radius="sm">
+                        {guestToDelete.firstName.charAt(0)}{guestToDelete.lastName.charAt(0)}
+                      </Avatar>
+                    )}
+                    <div>
+                      <Text fw={500}>
+                        {guestToDelete.firstName} {guestToDelete.lastName}
+                      </Text>
+                      <Text size="sm" c="dimmed">
+                        {guestToDelete.email}
+                      </Text>
+                      <Text size="sm" c="dimmed">
+                        {guestToDelete.bookings?.length || 0} booking(s)
+                      </Text>
+                      {guestToDelete.bookings?.some(booking => 
+                        ["CONFIRMED", "CHECKED_IN"].includes(booking.status)
+                      ) && (
+                        <Badge color="red" size="sm" mt="xs">
+                          Has Active Bookings
+                        </Badge>
+                      )}
+                    </div>
+                  </Group>
+                </Card>
+              )}
+
+              <Text size="sm" c="red" fw={500}>
+                To confirm force deletion, type: FORCE DELETE
+              </Text>
+              
+              <TextInput
+                placeholder="Type 'FORCE DELETE' to confirm"
+                value={confirmationText}
+                onChange={(event) => setConfirmationText(event.currentTarget.value)}
+                error={confirmationText && confirmationText !== "FORCE DELETE" ? "Must type exactly 'FORCE DELETE'" : null}
+              />
+
+              <Group justify="flex-end">
+                <Button variant="outline" onClick={closeDeleteModal}>
+                  Cancel
+                </Button>
+                <Button 
+                  color="red" 
+                  onClick={confirmDelete}
+                  disabled={confirmationText !== "FORCE DELETE"}
+                  leftSection={<IconTrash size={16} />}
+                >
+                  Force Delete Guest
+                </Button>
+              </Group>
+            </Stack>
+          </Modal>
 
           {/* Import Guests Modal */}
           <Modal opened={importOpened} onClose={closeImport} title="Import Guests from Excel" size="lg">
