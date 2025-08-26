@@ -38,23 +38,41 @@ export async function processAndStoreImage(
 
   // Try R2 upload first if configured
   if (isR2Configured()) {
-    const uploadResult = await uploadToR2(imageData, finalFileName, folder);
-    
-    if (uploadResult.success && uploadResult.url) {
-      return {
-        success: true,
-        imageUrl: uploadResult.url,
-        isR2: true
-      };
-    } else {
-      console.warn('R2 upload failed, falling back to base64:', uploadResult.error);
+    try {
+      console.log("Attempting R2 upload...");
+      const uploadResult = await uploadToR2(imageData, finalFileName, folder);
+      
+      if (uploadResult.success && uploadResult.url) {
+        console.log("R2 upload successful:", uploadResult.url);
+        return {
+          success: true,
+          imageUrl: uploadResult.url,
+          isR2: true
+        };
+      } else {
+        console.warn("R2 upload failed:", uploadResult.error);
+        // Fall through to base64 storage
+      }
+    } catch (error) {
+      console.error("R2 upload error:", error);
+      // Fall through to base64 storage
     }
+  } else {
+    console.log("R2 not configured, using base64 storage");
   }
 
   // Fallback to base64 storage
+  // Ensure we return the original base64 data, not a constructed path
+  if (!imageData.startsWith('data:')) {
+    return {
+      success: false,
+      error: 'Invalid image data for base64 storage'
+    };
+  }
+
   return {
     success: true,
-    imageUrl: imageData,
+    imageUrl: imageData, // Store the original base64 data
     isR2: false
   };
 }

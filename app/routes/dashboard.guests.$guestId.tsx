@@ -19,6 +19,8 @@ import {
   Alert,
   NumberFormatter,
   Notification,
+  Avatar,
+  Box,
 } from "@mantine/core";
 import { format, differenceInDays, startOfYear, endOfYear } from "date-fns";
 import {
@@ -41,6 +43,7 @@ import {
 } from "@tabler/icons-react";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
+import { DashboardLayout } from "~/components/DashboardLayout";
 
 export const meta: MetaFunction = () => {
   return [
@@ -100,7 +103,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const totalRevenue = guest.bookings.reduce((sum, booking) => sum + booking.totalAmount, 0);
   const yearlyRevenue = yearlyBookings.reduce((sum, booking) => sum + booking.totalAmount, 0);
-  
+
   const totalPaid = guest.bookings.reduce((sum, booking) => {
     return sum + (booking.payment?.status === "COMPLETED" ? booking.payment.amount : 0);
   }, 0);
@@ -173,7 +176,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function GuestDetails() {
-  const { guest, stats } = useLoaderData<typeof loader>();
+  const { user, guest, stats } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const success = searchParams.get("success");
 
@@ -208,59 +211,60 @@ export default function GuestDetails() {
   const loyaltyTier = getLoyaltyTier();
 
   return (
-    <Stack>
-      {/* Header */}
-      <Group justify="space-between">
-        <Group>
-          <Button
-            component={Link}
-            to="/dashboard/guests"
-            leftSection={<IconArrowLeft size={16} />}
-            variant="subtle"
-          >
-            Back to Guests
-          </Button>
-          <Title order={2}>
-            {guest.firstName} {guest.lastName} - Guest Details
-          </Title>
-          <Badge color={loyaltyTier.color} size="lg">
-            {loyaltyTier.tier} Member
-          </Badge>
+    <DashboardLayout user={user}>
+      <Stack>
+        {/* Header */}
+        <Group justify="space-between">
+          <Group>
+            <Button
+              component={Link}
+              to="/dashboard/guests"
+              leftSection={<IconArrowLeft size={16} />}
+              variant="subtle"
+            >
+              Back to Guests
+            </Button>
+            <Title order={2}>
+              {guest.firstName} {guest.lastName} - Guest Details
+            </Title>
+            <Badge color={loyaltyTier.color} size="lg">
+              {loyaltyTier.tier} Member
+            </Badge>
+          </Group>
+          <Group gap="sm">
+            <Button
+              component={Link}
+              to={`/dashboard/guests/new?guestId=${guest.id}`}
+              leftSection={<IconEdit size={16} />}
+              variant="light"
+            >
+              Edit Guest
+            </Button>
+            <Button
+              component={Link}
+              to={`/dashboard/bookings/new?guestId=${guest.id}`}
+              leftSection={<IconPlus size={16} />}
+              variant="filled"
+            >
+              Add Booking
+            </Button>
+          </Group>
         </Group>
-        <Group gap="sm">
-          <Button
-            component={Link}
-            to={`/dashboard/guests/new?guestId=${guest.id}`}
-            leftSection={<IconEdit size={16} />}
-            variant="light"
-          >
-            Edit Guest
-          </Button>
-          <Button
-            component={Link}
-            to={`/dashboard/bookings/new?guestId=${guest.id}`}
-            leftSection={<IconPlus size={16} />}
-            variant="filled"
-          >
-            Add Booking
-          </Button>
-        </Group>
-      </Group>
 
-      {success === "guest-updated" && (
-        <Notification
-          icon={<IconCheck size={18} />}
-          color="green"
-          title="Success"
-          onClose={() => {
-            const url = new URL(window.location);
-            url.searchParams.delete("success");
-            window.history.replaceState({}, "", url);
-          }}
-        >
-          Guest information has been updated successfully.
-        </Notification>
-      )}
+        {success === "guest-updated" && (
+          <Notification
+            icon={<IconCheck size={18} />}
+            color="green"
+            title="Success"
+            onClose={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("success");
+              window.history.replaceState({}, "", url);
+            }}
+          >
+            Guest information has been updated successfully.
+          </Notification>
+        )}
 
         {/* Guest Information */}
         <Grid>
@@ -268,9 +272,18 @@ export default function GuestDetails() {
             <Card withBorder h="100%">
               <Stack>
                 <Group>
-                  <ThemeIcon size="lg" variant="light">
-                    <IconUser size={20} />
-                  </ThemeIcon>
+                  {guest.profilePicture ? (
+                    <Avatar 
+                      src={guest.profilePicture} 
+                      size="lg" 
+                      radius="md"
+                      alt={`${guest.firstName} ${guest.lastName}`}
+                    />
+                  ) : (
+                    <ThemeIcon size="lg" variant="light">
+                      <IconUser size={20} />
+                    </ThemeIcon>
+                  )}
                   <div>
                     <Text fw={600} size="lg">
                       {guest.firstName} {guest.lastName}
@@ -280,6 +293,70 @@ export default function GuestDetails() {
                     </Text>
                   </div>
                 </Group>
+
+                {/* Profile Picture Preview Section */}
+                {guest.profilePicture && (
+                  <Box>
+                    <Text size="sm" fw={500} mb="xs">Profile Picture</Text>
+                    <Avatar
+                      src={guest.profilePicture}
+                      size={120}
+                      radius="md"
+                      mx="auto"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        // Open full size image in new window
+                        const newWindow = window.open('', '_blank');
+                        if (newWindow) {
+                          newWindow.document.write(`
+                            <html>
+                              <head>
+                                <title>${guest.firstName} ${guest.lastName} - Profile Picture</title>
+                                <style>
+                                  body { 
+                                    margin: 0; 
+                                    padding: 20px; 
+                                    background: #f5f5f5; 
+                                    display: flex; 
+                                    justify-content: center; 
+                                    align-items: center; 
+                                    min-height: 100vh;
+                                    font-family: Arial, sans-serif;
+                                  }
+                                  img { 
+                                    max-width: 90vw; 
+                                    max-height: 90vh; 
+                                    border-radius: 8px; 
+                                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                                  }
+                                  .caption {
+                                    position: absolute;
+                                    bottom: 20px;
+                                    left: 50%;
+                                    transform: translateX(-50%);
+                                    background: rgba(0,0,0,0.7);
+                                    color: white;
+                                    padding: 8px 16px;
+                                    border-radius: 4px;
+                                    font-size: 14px;
+                                  }
+                                </style>
+                              </head>
+                              <body>
+                                <img src="${guest.profilePicture}" alt="${guest.firstName} ${guest.lastName} Profile Picture" />
+                                <div class="caption">${guest.firstName} ${guest.lastName}</div>
+                              </body>
+                            </html>
+                          `);
+                          newWindow.document.close();
+                        }
+                      }}
+                    />
+                    <Text size="xs" c="dimmed" ta="center" mt="xs">
+                      Click to view full size
+                    </Text>
+                  </Box>
+                )}
 
                 <Divider />
 
@@ -519,64 +596,64 @@ export default function GuestDetails() {
                     <Table.Th>Payment Status</Table.Th>
                     <Table.Th>Booking Status</Table.Th>
                     <Table.Th>Security Deposit</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {guest.bookings.slice(0, 10).map((booking) => (
-                  <Table.Tr key={booking.id}>
-                    <Table.Td>
-                      <div>
-                        <Text size="sm" fw={500}>
-                          {booking.room.blockRelation?.name || booking.room.block}-{booking.room.number}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {booking.room.type.replace("_", " ")}
-                        </Text>
-                      </div>
-                    </Table.Td>
-                    <Table.Td>
-                      <div>
-                        <Text size="sm">
-                          {format(new Date(booking.checkIn), "MMM dd")} - {format(new Date(booking.checkOut), "MMM dd, yyyy")}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {differenceInDays(new Date(booking.checkOut), new Date(booking.checkIn))} nights
-                        </Text>
-                      </div>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text fw={500}>
-                        <NumberFormatter value={booking.totalAmount} prefix="₵" thousandSeparator />
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={getStatusColor(booking.payment?.status || "PENDING")} size="sm">
-                        {booking.payment?.status || "PENDING"}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={getStatusColor(booking.status)} size="sm">
-                        {booking.status.replace("_", " ")}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      {booking.securityDeposit ? (
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {guest.bookings.slice(0, 10).map((booking) => (
+                    <Table.Tr key={booking.id}>
+                      <Table.Td>
+                        <div>
+                          <Text size="sm" fw={500}>
+                            {booking.room.blockRelation?.name || booking.room.block}-{booking.room.number}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {booking.room.type.replace("_", " ")}
+                          </Text>
+                        </div>
+                      </Table.Td>
+                      <Table.Td>
                         <div>
                           <Text size="sm">
-                            <NumberFormatter value={booking.securityDeposit.amount} prefix="₵" />
+                            {format(new Date(booking.checkIn), "MMM dd")} - {format(new Date(booking.checkOut), "MMM dd, yyyy")}
                           </Text>
-                          <Badge color={getStatusColor(booking.securityDeposit.status)} size="xs">
-                            {booking.securityDeposit.status}
-                          </Badge>
+                          <Text size="xs" c="dimmed">
+                            {differenceInDays(new Date(booking.checkOut), new Date(booking.checkIn))} nights
+                          </Text>
                         </div>
-                      ) : (
-                        <Text size="sm" c="dimmed">None</Text>
-                      )}
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text fw={500}>
+                          <NumberFormatter value={booking.totalAmount} prefix="₵" thousandSeparator />
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={getStatusColor(booking.payment?.status || "PENDING")} size="sm">
+                          {booking.payment?.status || "PENDING"}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={getStatusColor(booking.status)} size="sm">
+                          {booking.status.replace("_", " ")}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        {booking.securityDeposit ? (
+                          <div>
+                            <Text size="sm">
+                              <NumberFormatter value={booking.securityDeposit.amount} prefix="₵" />
+                            </Text>
+                            <Badge color={getStatusColor(booking.securityDeposit.status)} size="xs">
+                              {booking.securityDeposit.status}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <Text size="sm" c="dimmed">None</Text>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
             </Table.ScrollContainer>
           ) : (
             <Alert icon={<IconInfoCircle size={16} />} color="blue">
@@ -611,5 +688,6 @@ export default function GuestDetails() {
           </Card>
         )}
       </Stack>
+    </DashboardLayout>
   );
 }

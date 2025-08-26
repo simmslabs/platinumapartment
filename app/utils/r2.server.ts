@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Cloudflare R2 Configuration
@@ -10,6 +10,17 @@ const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL; // Optional: Your custom domain
 
 if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME) {
   console.warn("R2 environment variables not fully configured. Image uploads will fall back to base64 storage.");
+  console.warn("Missing:", {
+    R2_ACCOUNT_ID: !R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID: !R2_ACCESS_KEY_ID, 
+    R2_SECRET_ACCESS_KEY: !R2_SECRET_ACCESS_KEY,
+    R2_BUCKET_NAME: !R2_BUCKET_NAME
+  });
+} else {
+  console.log("R2 configuration loaded successfully");
+  console.log("Account ID:", R2_ACCOUNT_ID);
+  console.log("Access Key ID:", R2_ACCESS_KEY_ID?.substring(0, 8) + "...");
+  console.log("Bucket Name:", R2_BUCKET_NAME);
 }
 
 // Initialize R2 client (S3-compatible)
@@ -21,6 +32,10 @@ const r2Client = R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
+      // Required for Cloudflare R2 compatibility
+      forcePathStyle: false, // Changed to false for R2
+      // Additional R2-specific configuration
+      apiVersion: '2006-03-01',
     })
   : null;
 
@@ -91,12 +106,22 @@ export async function uploadToR2(
       CacheControl: 'public, max-age=31536000', // Cache for 1 year
     });
 
-    await r2Client.send(command);
+    try {
+      await r2Client.send(command);
+    } catch (error) {
+      console.error('R2 upload command failed:', error);
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
+      throw error;
+    }
 
     // Generate public URL
-    const publicUrl = R2_PUBLIC_URL 
+    const publicUrl = R2_PUBLIC_URL && R2_PUBLIC_URL.startsWith('http') 
       ? `${R2_PUBLIC_URL}/${key}`
-      : `https://pub-${R2_ACCOUNT_ID}.r2.dev/${key}`;
+      : `https://${R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
 
     return {
       success: true,
@@ -206,7 +231,9 @@ export function extractR2Key(url: string): string | null {
  * @returns boolean indicating if R2 is ready to use
  */
 export function isR2Configured(): boolean {
-  return r2Client !== null;
+  // Temporarily disable R2 to test base64 fallback
+  return false;
+  // return r2Client !== null;
 }
 
 /**

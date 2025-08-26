@@ -21,6 +21,7 @@ import {
   NumberFormatter,
   FileInput,
   List,
+  Avatar,
 } from "@mantine/core";
 import { format } from "date-fns";
 import { useDisclosure } from "@mantine/hooks";
@@ -505,14 +506,28 @@ export default function Guests() {
                   filteredGuests.map((guest) => (
                   <Table.Tr key={guest.id}>
                     <Table.Td>
-                      <div>
-                        <Text fw={500}>
-                          {guest.firstName} {guest.lastName}
-                        </Text>
-                        <Text size="sm" c="dimmed">
-                          {guest.email}
-                        </Text>
-                      </div>
+                      <Group gap="sm">
+                        {guest.profilePicture ? (
+                          <Avatar 
+                            src={guest.profilePicture} 
+                            size="md" 
+                            radius="sm"
+                            alt={`${guest.firstName} ${guest.lastName}`}
+                          />
+                        ) : (
+                          <Avatar size="md" radius="sm">
+                            {guest.firstName.charAt(0)}{guest.lastName.charAt(0)}
+                          </Avatar>
+                        )}
+                        <div>
+                          <Text fw={500}>
+                            {guest.firstName} {guest.lastName}
+                          </Text>
+                          <Text size="sm" c="dimmed">
+                            {guest.email}
+                          </Text>
+                        </div>
+                      </Group>
                     </Table.Td>
                     <Table.Td>
                       <div>

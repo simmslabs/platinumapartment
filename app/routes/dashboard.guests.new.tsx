@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useActionData, Form, Link, useLoaderData } from "@remix-run/react";
+import { useActionData, Link, useLoaderData } from "@remix-run/react";
 import {
   Title,
   Stack,
@@ -17,17 +17,17 @@ import {
   Alert,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { useState } from "react";
-import { 
-  IconArrowLeft, 
-  IconUserPlus, 
+import { useEffect, useState } from "react";
+import {
+  IconArrowLeft,
+  IconUserPlus,
   IconExclamationMark
 } from "@tabler/icons-react";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { ProfilePictureUploader } from "~/components/ImageUploader";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import { updateProfilePicture, type ImageProcessResult } from "~/utils/image.server";
+import { processAndStoreImage } from "~/utils/image.server";
 import bcrypt from "bcryptjs";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
@@ -41,20 +41,20 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
-  
+
   if (!user || user.role === "GUEST") {
     throw new Response("Access denied", { status: 403 });
   }
 
   const url = new URL(request.url);
   const guestId = url.searchParams.get("guestId");
-  
+
   let guest = null;
   if (guestId) {
     guest = await db.user.findUnique({
       where: { id: guestId, role: "GUEST" },
     });
-    
+
     if (!guest) {
       throw new Response("Guest not found", { status: 404 });
     }
@@ -66,16 +66,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
-  
+
   if (!user || user.role === "GUEST") {
     throw new Response("Access denied", { status: 403 });
   }
 
   const formData = await request.formData();
   const url = new URL(request.url);
-  const guestId = url.searchParams.get("guestId") as string | null;
-  const isEditing = Boolean(guestId);
   
+  // Check for guestId in both form data and URL parameters
+  const guestId = (formData.get("guestId") as string | null) || url.searchParams.get("guestId");
+  const isEditing = Boolean(guestId);
+
   const firstName = formData.get("firstName") as string;
   const lastName = formData.get("lastName") as string;
   const email = formData.get("email") as string;
@@ -141,7 +143,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       // Check if email is taken by another user
       const existingUser = await db.user.findFirst({
-        where: { 
+        where: {
           email: email.trim().toLowerCase(),
           NOT: { id: guestId }
         },
@@ -157,7 +159,7 @@ export async function action({ request }: ActionFunctionArgs) {
       // Check if ID card number is taken by another user
       if (idCard?.trim()) {
         const existingIdCard = await db.user.findFirst({
-          where: { 
+          where: {
             idCard: idCard.trim(),
             NOT: { id: guestId }
           },
@@ -168,6 +170,26 @@ export async function action({ request }: ActionFunctionArgs) {
             { errors: { idCard: "A user with this ID card number already exists" }, success: false },
             { status: 400 }
           );
+        }
+      }
+
+      // Process profile picture if provided
+      let finalProfilePicture = existingGuest.profilePicture;
+
+      if (profilePicture && profilePicture !== "") {
+        try {
+          const result = await processAndStoreImage(profilePicture, "profile.jpg", "profile-pictures");
+          if (result.success && result.imageUrl) {
+            finalProfilePicture = result.imageUrl;
+          } else {
+            console.error("Error processing profile picture:", result.error);
+            // Fall back to base64 if processing fails
+            finalProfilePicture = profilePicture;
+          }
+        } catch (error) {
+          console.error("Error processing profile picture:", error);
+          // Fall back to base64 if processing fails
+          finalProfilePicture = profilePicture;
         }
       }
 
@@ -182,7 +204,7 @@ export async function action({ request }: ActionFunctionArgs) {
           address: address?.trim() || null,
           idCard: idCard?.trim() || null,
           gender: gender as "MALE" | "FEMALE" | "OTHER" || null,
-          profilePicture: profilePicture || existingGuest.profilePicture,
+          profilePicture: finalProfilePicture,
         },
       });
 
@@ -221,18 +243,21 @@ export async function action({ request }: ActionFunctionArgs) {
 
       // Process profile picture if provided
       let processedImageUrl: string | null = null;
-      let imageResult: ImageProcessResult | null = null;
+
       if (profilePicture && profilePicture !== "") {
-        imageResult = await updateProfilePicture(
-          `temp_${Date.now()}`, // Temporary ID, will be updated after user creation
-          profilePicture
-        );
-        
-        if (imageResult.success && imageResult.imageUrl) {
-          processedImageUrl = imageResult.imageUrl;
-        } else {
-          console.warn("Failed to process profile picture:", imageResult.error);
-          // Continue with user creation even if image processing fails
+        try {
+          const result = await processAndStoreImage(profilePicture, "profile.jpg", "profile-pictures");
+          if (result.success && result.imageUrl) {
+            processedImageUrl = result.imageUrl;
+          } else {
+            console.error("Error processing profile picture:", result.error);
+            // Fall back to base64 if processing fails
+            processedImageUrl = profilePicture;
+          }
+        } catch (error) {
+          console.error("Error processing profile picture:", error);
+          // Fall back to base64 if processing fails
+          processedImageUrl = profilePicture;
         }
       }
 
@@ -252,28 +277,6 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      // If we processed an image with a temporary ID, update it with the actual user ID
-      if (processedImageUrl && imageResult?.isR2) {
-        try {
-          const finalImageResult = await updateProfilePicture(
-            newGuest.id,
-            profilePicture,
-            processedImageUrl // This will delete the temporary image
-          );
-          
-          if (finalImageResult.success && finalImageResult.imageUrl) {
-            // Update the user record with the final image URL
-            await db.user.update({
-              where: { id: newGuest.id },
-              data: { profilePicture: finalImageResult.imageUrl }
-            });
-          }
-        } catch (error) {
-          console.warn("Failed to update profile picture with final user ID:", error);
-          // Don't fail the user creation for this
-        }
-      }
-
       return redirect(`/dashboard/guests/${newGuest.id}?success=created`);
     }
   } catch (error) {
@@ -289,9 +292,13 @@ export default function NewGuestPage() {
   const { user, guest } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [profilePicture, setProfilePicture] = useState<string | null>(guest?.profilePicture || null);
-  
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const isEditing = Boolean(guest);
+
+  const handleProfilePictureChange = (url: string | null) => {
+    form.setFieldValue('profilePicture', url || '');
+  };
 
   // Helper function to get field errors
   const getFieldError = (field: string): string | undefined => {
@@ -305,13 +312,14 @@ export default function NewGuestPage() {
 
   const form = useForm({
     initialValues: {
-      firstName: guest?.firstName || "",
-      lastName: guest?.lastName || "",
-      email: guest?.email || "",
-      phone: guest?.phone || "",
-      address: guest?.address || "",
-      idCard: guest?.idCard || "",
-      gender: guest?.gender || "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      address: "",
+      idCard: "",
+      gender: "",
+      profilePicture: "",
     },
     validate: {
       firstName: (value) => (!value?.trim() ? "First name is required" : null),
@@ -326,6 +334,74 @@ export default function NewGuestPage() {
       gender: (value) => (!value?.trim() ? "Gender is required" : null),
     },
   });
+
+  // Set form values when editing a guest
+  useEffect(() => {
+    if (guest) {
+      form.setValues({
+        firstName: guest.firstName || "",
+        lastName: guest.lastName || "",
+        email: guest.email || "",
+        phone: guest.phone || "",
+        address: guest.address || "",
+        idCard: guest.idCard || "",
+        gender: guest.gender || "",
+        profilePicture: guest.profilePicture || "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guest]);
+
+  const _onSubmit = async (data: typeof form.values) => {
+    setIsSubmitting(true);
+    setSubmitError(null); // Clear any previous errors
+    
+    try {
+      const formData = new FormData();
+      
+      // Add all form fields
+      formData.set('firstName', data.firstName);
+      formData.set('lastName', data.lastName);
+      formData.set('email', data.email);
+      formData.set('phone', data.phone);
+      formData.set('address', data.address || '');
+      formData.set('idCard', data.idCard);
+      formData.set('gender', data.gender);
+      formData.set('profilePicture', data.profilePicture || '');
+      
+      // Add guest ID when editing
+      if (isEditing && guest) {
+        formData.set('guestId', guest.id);
+      }
+      
+      const response = await fetch(window.location.pathname + window.location.search, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        // Check if response is a redirect
+        if (response.redirected || response.status === 302) {
+          window.location.href = response.url;
+        } else {
+          // Handle success - redirect manually
+          if (isEditing && guest) {
+            window.location.href = `/dashboard/guests/${guest.id}?success=updated`;
+          } else {
+            window.location.href = '/dashboard/guests?success=created';
+          }
+        }
+      } else {
+        // Handle error response
+        const errorData = await response.json();
+        setSubmitError(errorData.errors?._form || 'An error occurred while submitting the form');
+      }
+    } catch (error) {
+      setSubmitError('Network error. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <DashboardLayout user={user}>
@@ -360,7 +436,7 @@ export default function NewGuestPage() {
           </Button>
         </Group>
 
-        {/* Error Alert */}
+        {/* Error Alert - Server Side */}
         {actionData?.errors && "_form" in actionData.errors && (
           <Alert
             icon={<IconExclamationMark size={16} />}
@@ -372,20 +448,24 @@ export default function NewGuestPage() {
           </Alert>
         )}
 
+        {/* Error Alert - Client Side */}
+        {submitError && (
+          <Alert
+            icon={<IconExclamationMark size={16} />}
+            title="Error"
+            color="red"
+            variant="light"
+          >
+            {submitError}
+          </Alert>
+        )}
+
         {/* Main Form */}
         <Card withBorder>
           <LoadingOverlay visible={isSubmitting} />
-          
-          <Form
-            method="post"
-            onSubmit={(event) => {
-              setIsSubmitting(true);
-              // Add profile picture to form data if available
-              if (profilePicture) {
-                const formData = new FormData(event.currentTarget);
-                formData.set("profilePicture", profilePicture);
-              }
-            }}
+
+          <form
+            onSubmit={form.onSubmit(_onSubmit)}
           >
             <Stack gap="lg">
               <Title order={3}>{isEditing ? "Edit Guest Information" : "Guest Information"}</Title>
@@ -393,8 +473,8 @@ export default function NewGuestPage() {
               {/* Profile Picture Section */}
               <ProfilePictureUploader
                 userId={guest?.id || `temp_${Date.now()}`}
-                value={profilePicture}
-                onChange={setProfilePicture}
+                value={form.values.profilePicture}
+                onChange={handleProfilePictureChange}
               />
 
               {/* Personal Information */}
@@ -471,9 +551,6 @@ export default function NewGuestPage() {
                 error={getFieldError("address")}
               />
 
-              {/* Hidden input for profile picture */}
-              <input type="hidden" name="profilePicture" value={profilePicture || ""} />
-
               {/* Action Buttons */}
               <Group justify="flex-end" gap="md" pt="md">
                 <Button
@@ -484,7 +561,7 @@ export default function NewGuestPage() {
                 >
                   Cancel
                 </Button>
-                
+
                 <Button
                   type="submit"
                   leftSection={<IconUserPlus size={16} />}
@@ -494,7 +571,7 @@ export default function NewGuestPage() {
                 </Button>
               </Group>
             </Stack>
-          </Form>
+          </form>
         </Card>
       </Stack>
     </DashboardLayout>

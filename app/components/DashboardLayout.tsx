@@ -6,6 +6,8 @@ import {
   Badge,
   Stack,
   ActionIcon,
+  Burger,
+  Group,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { Form, Link, useLocation } from "@remix-run/react";
@@ -29,7 +31,7 @@ import {
   IconWallet,
 } from "@tabler/icons-react";
 import type { User } from "@prisma/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -37,7 +39,7 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, user }: DashboardLayoutProps) {
-  const [opened] = useDisclosure();
+  const [opened, { toggle, close }] = useDisclosure();
   const [checkoutCount, setCheckoutCount] = useState(0);
   const location = useLocation();
 
@@ -143,13 +145,20 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
     return ["Reports"].includes(item.label);
   });
 
+  // Handle navigation clicks on mobile
+  const handleNavClick = useCallback(() => {
+    if (window.innerWidth < 768) {
+      close();
+    }
+  }, [close]);
+
   return (
     <>
       <AppShell
-        header={{ height: 0 }}
+        header={{ height: { base: 60, md: 0 } }}
         navbar={{
           width: 280,
-          breakpoint: "sm",
+          breakpoint: "md",
           collapsed: { mobile: !opened, desktop: false },
         }}
         padding={0}
@@ -158,27 +167,74 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
             background: '#f8fafc',
             minHeight: '100vh',
           },
-          navbar: {
-            background: '#2a3447',
-            border: 'none',
-            boxShadow: 'none',
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            zIndex: 1000,
-          },
           main: {
             background: 'transparent',
             padding: 0,
-            marginLeft: '280px',
-            width: 'calc(100% - 280px)',
           }
         }}
+        classNames={{
+          main: 'dashboard-main'
+        }}
       >
-        <AppShell.Navbar p={0}>
-          <div className="modern-navbar">
-            {/* Header Section */}
-            <div className="navbar-header">
+        {/* Mobile Header */}
+        <AppShell.Header hiddenFrom="md" className="mobile-header">
+          <Group h="100%" px="md" justify="space-between">
+            <Group>
+              <Burger
+                opened={opened}
+                onClick={toggle}
+                color="white"
+                size="sm"
+              />
+              <Group gap={8}>
+                <IconBuildingStore size={20} color="white" />
+                <Text c="white" fw={600} size="sm">
+                  Platinum Apartments
+                </Text>
+              </Group>
+            </Group>
+            
+            {/* Mobile User Menu */}
+            {user && (
+              <Menu shadow="md" width={200}>
+                <Menu.Target>
+                  <ActionIcon variant="transparent" size="lg">
+                    <Avatar
+                      size="sm"
+                      radius="xl"
+                      name={`${user.firstName} ${user.lastName}`}
+                      color="blue"
+                    />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Account</Menu.Label>
+                  <Menu.Item
+                    component={Link}
+                    to="/dashboard/profile"
+                    leftSection={<IconSettings size={14} />}
+                  >
+                    Profile Settings
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item
+                    component={Form}
+                    action="/logout"
+                    method="post"
+                    leftSection={<IconLogout size={14} />}
+                    color="red"
+                  >
+                    Logout
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            )}
+          </Group>
+        </AppShell.Header>
+        <AppShell.Navbar p={0} data-mobile-opened={opened}>
+          <div className="modern-navbar" data-mobile={true}>
+            {/* Header Section - Hidden on mobile via CSS */}
+            <div className="navbar-header navbar-brand-desktop">
               <div className="brand-section">
                 <div className="brand-logo">
                   <div className="logo-icon">
@@ -202,12 +258,13 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
                     to={item.link}
                     className={`nav-item ${item.isActive ? 'active' : ''}`}
                     style={{ textDecoration: 'none' }}
+                    onClick={handleNavClick}
                   >
                     <div className="nav-item-content">
                       <div className="nav-icon">
                         <item.icon size={18} />
                       </div>
-                      <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                      <span className="nav-label">
                         {item.label}
                       </span>
                       {item.badge && (
@@ -238,12 +295,13 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
                         to={item.link}
                         className={`nav-item ${item.isActive ? 'active' : ''}`}
                         style={{ textDecoration: 'none' }}
+                        onClick={handleNavClick}
                       >
                         <div className="nav-item-content">
                           <div className="nav-icon">
                             <item.icon size={18} />
                           </div>
-                          <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                          <span className="nav-label">
                             {item.label}
                           </span>
                         </div>
@@ -268,12 +326,13 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
                         to={item.link}
                         className={`nav-item ${item.isActive ? 'active' : ''}`}
                         style={{ textDecoration: 'none' }}
+                        onClick={handleNavClick}
                       >
                         <div className="nav-item-content">
                           <div className="nav-icon">
                             <item.icon size={18} />
                           </div>
-                          <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                          <span className="nav-label">
                             {item.label}
                           </span>
                         </div>
@@ -298,12 +357,13 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
                         to={item.link}
                         className={`nav-item ${item.isActive ? 'active' : ''}`}
                         style={{ textDecoration: 'none' }}
+                        onClick={handleNavClick}
                       >
                         <div className="nav-item-content">
                           <div className="nav-icon">
                             <item.icon size={18} />
                           </div>
-                          <span className="nav-label" style={{ color: 'white', fontSize: '14px', fontWeight: 500 }}>
+                          <span className="nav-label">
                             {item.label}
                           </span>
                         </div>

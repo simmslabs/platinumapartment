@@ -2,32 +2,77 @@
 /* High specificity to override Mantine styles */
 
 .modern-navbar {
-  height: 100vh;
   background: #2a3447 !important;
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
   width: 280px;
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 1000;
 }
 
-/* Ensure navbar container is fixed */
+/* Ensure navbar container positioning */
 .mantine-AppShell-navbar {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
+  background: #2a3447 !important;
+  border: none !important;
   width: 280px !important;
-  height: 100vh !important;
   z-index: 1000 !important;
+}
+
+/* Desktop positioning */
+@media (min-width: 768px) {
+  .modern-navbar {
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+  }
+  
+  .mantine-AppShell-navbar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+  }
+}
+
+/* Mobile positioning */
+@media (max-width: 767px) {
+  .modern-navbar {
+    height: calc(100vh - 60px);
+    position: fixed;
+    top: 60px;
+    left: 0;
+  }
+  
+  .mantine-AppShell-navbar {
+    position: fixed !important;
+    top: 60px !important;
+    left: 0 !important;
+    height: calc(100vh - 60px) !important;
+  }
 }
 
 /* Additional override for AppShell root to ensure proper layout */
 .mantine-AppShell-root {
   position: relative !important;
+}
+
+/* Dashboard main responsive styles */
+.dashboard-main {
+  background: transparent;
+  padding: 0;
+}
+
+@media (min-width: 768px) {
+  .dashboard-main {
+    margin-left: 280px;
+  }
+}
+
+@media (max-width: 767px) {
+  .dashboard-main {
+    padding-top: 60px;
+  }
 }
 
 .modern-navbar * {
@@ -556,4 +601,149 @@
 .profile-section:focus-visible {
   outline: 2px solid #667eea;
   outline-offset: 2px;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 767px) {
+  /* Hide navbar brand on mobile since it's in the header */
+  .navbar-brand-desktop {
+    display: none !important;
+  }
+  
+  /* Ensure navbar content is visible and properly spaced */
+  .navbar-content {
+    padding-top: 20px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0; /* Allow flexbox to work properly */
+  }
+  
+  /* Force visibility of navigation items on mobile */
+  .modern-navbar[data-mobile="true"] {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .modern-navbar[data-mobile="true"] .navbar-content {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  .modern-navbar[data-mobile="true"] .nav-item {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  
+  .modern-navbar[data-mobile="true"] .nav-item-content {
+    display: flex !important;
+    visibility: visible !important;
+  }
+  
+  /* Ensure Stack components are visible */
+  .modern-navbar[data-mobile="true"] .mantine-Stack-root {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  /* Override any transform that might hide content */
+  .mantine-AppShell-navbar[data-mobile-opened="true"] {
+    transform: none !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Ensure mobile navbar is visible when opened */
+  @media (max-width: 767px) {
+    .mantine-AppShell-navbar[data-mobile-opened="true"] {
+      left: 0 !important;
+      transform: translateX(0) !important;
+    }
+    
+    .mantine-AppShell-navbar[data-mobile-opened="false"] {
+      transform: translateX(-100%) !important;
+    }
+  }
+  
+  /* Force text to be visible on mobile with highest specificity */
+  .modern-navbar[data-mobile="true"] .nav-label,
+  .modern-navbar[data-mobile="true"] .nav-label *,
+  .modern-navbar[data-mobile="true"] span.nav-label,
+  .modern-navbar[data-mobile="true"] .mantine-Text-root,
+  .modern-navbar[data-mobile="true"] .mantine-Stack-root span,
+  .modern-navbar[data-mobile="true"] .nav-item-content span {
+    color: white !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: inline !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+  }
+  
+  /* Ensure section headers are visible - override inline styles */
+  .modern-navbar[data-mobile="true"] .section-label,
+  .modern-navbar[data-mobile="true"] .section-label *,
+  .modern-navbar[data-mobile="true"] .section-label .mantine-Text-root,
+  .modern-navbar[data-mobile="true"] [style*="color: #8fa2b3"],
+  .modern-navbar[data-mobile="true"] [style*="color: rgb(143, 162, 179)"] {
+    color: rgba(255, 255, 255, 0.7) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    font-size: 12px !important;
+    text-transform: uppercase !important;
+  }
+  
+  /* Override ALL inline styles on mobile */
+  .modern-navbar[data-mobile="true"] * {
+    color: inherit !important;
+  }
+  
+  /* Ensure proper display for nav items */
+  .modern-navbar[data-mobile="true"] .nav-item .nav-label {
+    display: block !important;
+    flex: 1 !important;
+  }
+  
+  /* Ensure Stack components don't hide content */
+  .modern-navbar[data-mobile="true"] .mantine-Stack-root {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  /* Force visibility on all navigation elements */
+  .modern-navbar[data-mobile="true"] .nav-item,
+  .modern-navbar[data-mobile="true"] .nav-item-content {
+    display: flex !important;
+    align-items: center !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* Desktop styles */
+@media (min-width: 768px) {
+  .navbar-brand-desktop {
+    display: block !important;
+  }
+}
+
+/* Navigation label styles to avoid inline styles */
+.nav-label {
+  color: white !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* Mobile header styles */
+.mobile-header {
+  background: #2a3447 !important;
+  border: none !important;
+}
+
+@media (min-width: 768px) {
+  .mobile-header {
+    display: none !important;
+  }
 }

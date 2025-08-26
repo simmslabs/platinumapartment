@@ -179,10 +179,12 @@ export function ImageUploader({
     maxSize,
     processType,
     onSuccess: (url) => {
+      console.log('Image upload success:', url);
       setLocalImage(url);
       onChange?.(url);
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Image upload error:', error);
       // Error is handled by the hook
     }
   });
