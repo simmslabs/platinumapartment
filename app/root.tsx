@@ -4,11 +4,14 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteError,
+  isRouteErrorResponse,
 } from "@remix-run/react";
 import type { LinksFunction } from "@remix-run/node";
 import { MantineProvider, ColorSchemeScript } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { ModalsProvider } from "@mantine/modals";
+import { ErrorBoundary as CustomErrorBoundary } from "./components/ErrorBoundary";
 
 import "./tailwind.css";
 import "@mantine/core/styles.css";
@@ -73,4 +76,56 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return <Outlet />;
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+
+  if (isRouteErrorResponse(error)) {
+    // Handle redirect responses (like authentication redirects)
+    if (error.status === 302) {
+      // This shouldn't normally happen as redirects are handled by Remix
+      // But if we get here, redirect to login
+      window.location.href = "/login";
+      return null;
+    }
+
+    return (
+      <html lang="en">
+        <head>
+          <title>Error {error.status}</title>
+          <Meta />
+          <Links />
+          <ColorSchemeScript />
+        </head>
+        <body>
+          <MantineProvider theme={theme} defaultColorScheme="light">
+            <CustomErrorBoundary 
+              error={{
+                status: error.status,
+                statusText: error.statusText,
+                data: error.data
+              }} 
+            />
+          </MantineProvider>
+        </body>
+      </html>
+    );
+  }
+
+  return (
+    <html lang="en">
+      <head>
+        <title>Unexpected Error</title>
+        <Meta />
+        <Links />
+        <ColorSchemeScript />
+      </head>
+      <body>
+        <MantineProvider theme={theme} defaultColorScheme="light">
+          <CustomErrorBoundary />
+        </MantineProvider>
+      </body>
+    </html>
+  );
 }

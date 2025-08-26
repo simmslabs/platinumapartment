@@ -20,7 +20,7 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { IconPlus, IconEdit, IconInfoCircle, IconFilter, IconSearch, IconTrash, IconBuilding, IconBox } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
-import { requireUserId, getUser } from "~/utils/session.server";
+import { requireUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { Room, AssetCondition, PricingPeriod, RoomStatus } from "@prisma/client";
 import { useState, useMemo, useEffect } from "react";
@@ -33,8 +33,7 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireUserId(request);
-  const user = await getUser(request);
+  const user = await requireUser(request);
 
   const rooms = await db.room.findMany({
     include: {
@@ -64,7 +63,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  await requireUserId(request);
+  await requireUser(request);
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 

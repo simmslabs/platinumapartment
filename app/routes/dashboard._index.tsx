@@ -26,7 +26,7 @@ import {
   IconAlertTriangle,
 } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
-import { requireUserId, getUser } from "~/utils/session.server";
+import { requireUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 
 export const meta: MetaFunction = () => {
@@ -37,8 +37,7 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireUserId(request);
-  const user = await getUser(request);
+  const user = await requireUser(request);
 
   // Get dashboard statistics
   const [

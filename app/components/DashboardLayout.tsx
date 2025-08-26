@@ -83,7 +83,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
   ];
 
   const propertyManagementItems = [
-    { icon: IconBuildingStore, label: "Blocks", link: "/dashboard/blocks", isActive: location.pathname.includes("/blocks") },
+    // { icon: IconBuildingStore, label: "Blocks", link: "/dashboard/blocks", isActive: location.pathname.includes("/blocks") },
     { icon: IconClockHour2, label: "Maintenance", link: "/dashboard/maintenance", isActive: location.pathname.includes("/maintenance") },
     { icon: IconPlayerPlay, label: "Services", link: "/dashboard/services", isActive: location.pathname.includes("/services") },
   ];
@@ -443,22 +443,23 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
                 <div className="user-section">
                   <Menu shadow="md" width={200} position="right-start">
                     <Menu.Target>
-                      <div className="user-profile">
+                      <div className="profile-section">
                         <Avatar
                           size="sm"
                           radius="xl"
                           name={`${user.firstName} ${user.lastName}`}
                           color="blue"
+                          className="profile-avatar"
                         />
-                        <div className="user-info">
-                          <Text size="sm" fw={500} c="white">
+                        <div className="profile-info">
+                          <Text className="profile-name">
                             {user.firstName} {user.lastName}
                           </Text>
-                          <Text size="xs" c="dimmed">
+                          <Text className="profile-email">
                             {user.role.toLowerCase()}
                           </Text>
                         </div>
-                        <IconChevronRight size={14} color="#8fa2b3" />
+                        <IconChevronRight size={14} className="profile-menu" />
                       </div>
                     </Menu.Target>
                     <Menu.Dropdown>

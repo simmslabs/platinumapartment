@@ -21,7 +21,7 @@ import {
 } from "@mantine/core";
 import { IconArrowLeft, IconDeviceFloppy, IconAlertCircle, IconPlus, IconTrash } from "@tabler/icons-react";
 import  DashboardLayout   from "~/components/DashboardLayout";
-import { requireUserId, getUser } from "~/utils/session.server";
+import { requireUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { PricingPeriod, AssetCategory, AssetCondition } from "@prisma/client";
 import { useState } from "react";
@@ -34,8 +34,7 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireUserId(request);
-  const user = await getUser(request);
+  const user = await requireUser(request);
 
   // Get all blocks for the select dropdown
   const blocks = await db.block.findMany({
@@ -52,7 +51,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  await requireUserId(request);
+  await requireUser(request);
   const formData = await request.formData();
   
   const number = formData.get("number") as string;

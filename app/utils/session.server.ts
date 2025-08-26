@@ -11,6 +11,7 @@ const sessionStorage = createCookieSessionStorage({
     httpOnly: true,
     secrets: [SESSION_SECRET],
     secure: process.env.NODE_ENV === "production",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   },
 });
 
@@ -47,6 +48,22 @@ export async function requireUserId(
   return userId;
 }
 
+export async function requireUser(request: Request) {
+  const userId = await requireUserId(request);
+  
+  try {
+    const user = await getUserById(userId);
+    if (!user) {
+      // User not found - invalid session
+      throw logout(request);
+    }
+    return user;
+  } catch (error) {
+    // Any error should redirect to login
+    throw logout(request);
+  }
+}
+
 export async function getUser(request: Request) {
   const userId = await getUserId(request);
   if (typeof userId !== "string") {
@@ -55,15 +72,20 @@ export async function getUser(request: Request) {
 
   try {
     const user = await getUserById(userId);
+    if (!user) {
+      // User not found in database - invalid session
+      throw logout(request);
+    }
     return user;
-  } catch {
+  } catch (error) {
+    // Any error (database connection, user not found, etc.) should log out
     throw logout(request);
   }
 }
 
 export async function logout(request: Request) {
   const session = await getUserSession(request);
-  return redirect("/", {
+  return redirect("/login", {
     headers: {
       "Set-Cookie": await sessionStorage.destroySession(session),
     },
