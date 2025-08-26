@@ -23,7 +23,7 @@ import {
   IconUserPlus,
   IconExclamationMark
 } from "@tabler/icons-react";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { ProfilePictureUploader } from "~/components/ImageUploader";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";

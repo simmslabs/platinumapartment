@@ -58,7 +58,7 @@ import {
   subWeeks,
   subQuarters,
 } from "date-fns";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { Payment, SecurityDeposit, Booking, User, Room } from "@prisma/client";

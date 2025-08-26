@@ -19,7 +19,7 @@ import {
 import { DateInput } from "@mantine/dates";
 import { IconArrowLeft, IconDeviceFloppy, IconInfoCircle } from "@tabler/icons-react";
 import { format } from "date-fns";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import { emailService } from "~/utils/email.server";

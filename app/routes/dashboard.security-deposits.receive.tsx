@@ -22,7 +22,7 @@ import {
 import { useForm } from "@mantine/form";
 import { useState } from "react";
 import { IconArrowLeft, IconCreditCard, IconCheck, IconX } from "@tabler/icons-react";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import { mnotifyService } from "~/utils/mnotify.server";

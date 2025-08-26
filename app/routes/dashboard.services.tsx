@@ -23,7 +23,7 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { IconPlus, IconInfoCircle, IconTrash, IconEdit, IconBuildingStore } from "@tabler/icons-react";
 import { format } from "date-fns";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { Service, ServiceCategory } from "@prisma/client";

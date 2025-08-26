@@ -34,7 +34,7 @@ import {
   IconRefresh,
   IconAlertTriangle,
 } from "@tabler/icons-react";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { getApiSettings, updateApiSettings, validateApiSettings, getAllSettings, getSetting } from "~/utils/settings.server";
 import { useState, useEffect } from "react";

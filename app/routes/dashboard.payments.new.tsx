@@ -23,7 +23,7 @@ import {
 import { useForm } from "@mantine/form";
 import { IconArrowLeft, IconDeviceFloppy, IconInfoCircle, IconCreditCard, IconUser, IconHome } from "@tabler/icons-react";
 import { format } from "date-fns";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { PaymentMethod } from "@prisma/client";

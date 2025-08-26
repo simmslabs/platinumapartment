@@ -26,7 +26,7 @@ import {
 import { format } from "date-fns";
 import { useDisclosure } from "@mantine/hooks";
 import { IconPlus, IconEdit, IconInfoCircle, IconTrash, IconSearch, IconEye, IconUsers, IconWallet, IconTrendingUp, IconClock, IconUpload, IconDownload, IconFileSpreadsheet } from "@tabler/icons-react";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { User, Booking } from "@prisma/client";

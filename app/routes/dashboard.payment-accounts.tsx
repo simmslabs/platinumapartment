@@ -47,7 +47,7 @@ import {
   IconBuildingBank,
 } from "@tabler/icons-react";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { PaymentAccount } from "@prisma/client";

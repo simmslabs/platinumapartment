@@ -6,10 +6,8 @@ import {
   Badge,
   Stack,
   ActionIcon,
-  Burger,
   Group,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
 import { Form, Link, useLocation } from "@remix-run/react";
 import {
   IconBed,
@@ -29,6 +27,7 @@ import {
   IconCreditCard,
   IconChartBar,
   IconWallet,
+  IconMenu2,
 } from "@tabler/icons-react";
 import type { User } from "@prisma/client";
 import { useState, useEffect, useCallback } from "react";
@@ -38,8 +37,7 @@ interface DashboardLayoutProps {
   user: Pick<User, "id" | "firstName" | "lastName" | "email" | "role"> | null;
 }
 
-export function DashboardLayout({ children, user }: DashboardLayoutProps) {
-  const [opened, { toggle, close }] = useDisclosure();
+export default function DashboardLayout({ children, user }: DashboardLayoutProps) {
   const [checkoutCount, setCheckoutCount] = useState(0);
   const location = useLocation();
 
@@ -55,13 +53,11 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
         }
       } catch (error) {
         console.error('Failed to fetch checkout status:', error);
-        // Fallback to 0 if API fails
         setCheckoutCount(0);
       }
     };
 
     calculateCheckouts();
-    // Refresh every 5 minutes
     const interval = setInterval(calculateCheckouts, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -128,9 +124,9 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
     if (!user) return false;
     if (user.role === "ADMIN") return true;
     if (user.role === "MANAGER") {
-      return !["Security Deposits"].includes(item.label);
+      return !["Payment Accounts"].includes(item.label);
     }
-    return false; // Staff and Guests don't see financial items
+    return ["Payments"].includes(item.label);
   });
 
   const filteredBottomNavigation = bottomNavigationItems.filter((item) => {
@@ -139,18 +135,13 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
     if (user.role === "MANAGER") {
       return !["Users"].includes(item.label);
     }
-    if (user.role === "STAFF") {
-      return ["Analytics", "Reports"].includes(item.label);
-    }
-    return ["Reports"].includes(item.label);
+    return ["Settings"].includes(item.label);
   });
 
   // Handle navigation clicks on mobile
   const handleNavClick = useCallback(() => {
-    if (window.innerWidth < 768) {
-      close();
-    }
-  }, [close]);
+    // No longer needed for dropdown menu
+  }, []);
 
   return (
     <>
@@ -159,7 +150,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
         navbar={{
           width: 280,
           breakpoint: "md",
-          collapsed: { mobile: !opened, desktop: false },
+          collapsed: { mobile: true, desktop: false },
         }}
         padding={0}
         styles={{
@@ -180,12 +171,88 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
         <AppShell.Header hiddenFrom="md" className="mobile-header">
           <Group h="100%" px="md" justify="space-between">
             <Group>
-              <Burger
-                opened={opened}
-                onClick={toggle}
-                color="white"
-                size="sm"
-              />
+              {/* Mobile Navigation Dropdown */}
+              <Menu shadow="md" width={280} position="bottom-start">
+                <Menu.Target>
+                  <ActionIcon variant="transparent" size="lg">
+                    <IconMenu2 size={20} color="white" />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {/* Main Navigation Section */}
+                  <Menu.Label>Navigation</Menu.Label>
+                  {filteredMainNavigation.map((item) => (
+                    <Menu.Item
+                      key={item.label}
+                      component={Link}
+                      to={item.link}
+                      leftSection={<item.icon size={16} />}
+                      rightSection={item.badge && (
+                        <Badge size="xs" color="blue">
+                          {item.badge}
+                        </Badge>
+                      )}
+                    >
+                      {item.label}
+                    </Menu.Item>
+                  ))}
+                  
+                  {/* Property Management Section */}
+                  {filteredPropertyManagement.length > 0 && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Label>Property</Menu.Label>
+                      {filteredPropertyManagement.map((item) => (
+                        <Menu.Item
+                          key={item.label}
+                          component={Link}
+                          to={item.link}
+                          leftSection={<item.icon size={16} />}
+                        >
+                          {item.label}
+                        </Menu.Item>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Financial Section */}
+                  {filteredFinancialItems.length > 0 && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Label>Financial</Menu.Label>
+                      {filteredFinancialItems.map((item) => (
+                        <Menu.Item
+                          key={item.label}
+                          component={Link}
+                          to={item.link}
+                          leftSection={<item.icon size={16} />}
+                        >
+                          {item.label}
+                        </Menu.Item>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Bottom Navigation Section */}
+                  {filteredBottomNavigation.length > 0 && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Label>System</Menu.Label>
+                      {filteredBottomNavigation.map((item) => (
+                        <Menu.Item
+                          key={item.label}
+                          component={Link}
+                          to={item.link}
+                          leftSection={<item.icon size={16} />}
+                        >
+                          {item.label}
+                        </Menu.Item>
+                      ))}
+                    </>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+              
               <Group gap={8}>
                 <IconBuildingStore size={20} color="white" />
                 <Text c="white" fw={600} size="sm">
@@ -231,9 +298,11 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
             )}
           </Group>
         </AppShell.Header>
-        <AppShell.Navbar p={0} data-mobile-opened={opened}>
-          <div className="modern-navbar" data-mobile={true}>
-            {/* Header Section - Hidden on mobile via CSS */}
+        
+        {/* Desktop Navbar - Hidden on mobile */}
+        <AppShell.Navbar p={0} visibleFrom="md">
+          <div className="modern-navbar">
+            {/* Header Section */}
             <div className="navbar-header navbar-brand-desktop">
               <div className="brand-section">
                 <div className="brand-logo">
@@ -342,14 +411,10 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
                 </div>
               )}
 
-              {/* Administration Section */}
+              {/* Bottom Navigation */}
               {filteredBottomNavigation.length > 0 && (
-                <div className="administration-section">
-                  <div className="section-label">
-                    <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ color: '#8fa2b3', padding: '12px 16px 8px' }}>
-                      ADMINISTRATION
-                    </Text>
-                  </div>
+                <div className="bottom-section">
+                  <div className="section-divider"></div>
                   <Stack gap={2}>
                     {filteredBottomNavigation.map((item) => (
                       <Link
@@ -372,50 +437,49 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
                   </Stack>
                 </div>
               )}
-            </div>
 
-            {/* Bottom Section - Fixed Controls */}
-            <div className="navbar-bottom">
-              {/* User Profile */}
+              {/* User Profile Section - Desktop */}
               {user && (
-                <div className="user-profile">
-                  <Menu shadow="md" width={200} position="right-end">
+                <div className="user-section">
+                  <Menu shadow="md" width={200} position="right-start">
                     <Menu.Target>
-                      <div className="profile-section">
+                      <div className="user-profile">
                         <Avatar
-                          size={32}
+                          size="sm"
                           radius="xl"
-                          className="profile-avatar"
-                          src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.firstName} ${user.lastName}`}
-                        >
-                          {user.firstName[0]}{user.lastName[0]}
-                        </Avatar>
-                        <div className="profile-info">
-                          <Text size="sm" fw={500} c="white" className="profile-name">
-                            {user.firstName}
+                          name={`${user.firstName} ${user.lastName}`}
+                          color="blue"
+                        />
+                        <div className="user-info">
+                          <Text size="sm" fw={500} c="white">
+                            {user.firstName} {user.lastName}
                           </Text>
-                          <Text size="xs" c="dimmed" className="profile-email">
-                            {user.email}
+                          <Text size="xs" c="dimmed">
+                            {user.role.toLowerCase()}
                           </Text>
                         </div>
-                        <ActionIcon size="sm" variant="subtle" className="profile-menu">
-                          <IconChevronRight size={12} />
-                        </ActionIcon>
+                        <IconChevronRight size={14} color="#8fa2b3" />
                       </div>
                     </Menu.Target>
-
-                    <Menu.Dropdown className="profile-dropdown">
+                    <Menu.Dropdown>
                       <Menu.Label>Account</Menu.Label>
+                      <Menu.Item
+                        component={Link}
+                        to="/dashboard/profile"
+                        leftSection={<IconSettings size={14} />}
+                      >
+                        Profile Settings
+                      </Menu.Item>
                       <Menu.Divider />
-                      <Form method="post" action="/logout">
-                        <Menu.Item
-                          type="submit"
-                          leftSection={<IconLogout size={16} />}
-                          c="red"
-                        >
-                          Logout
-                        </Menu.Item>
-                      </Form>
+                      <Menu.Item
+                        component={Form}
+                        action="/logout"
+                        method="post"
+                        leftSection={<IconLogout size={14} />}
+                        color="red"
+                      >
+                        Logout
+                      </Menu.Item>
                     </Menu.Dropdown>
                   </Menu>
                 </div>

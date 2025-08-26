@@ -18,7 +18,7 @@ import {
 } from "@mantine/core";
 import { IconPlus, IconInfoCircle, IconTrash, IconSearch, IconDots, IconEye } from "@tabler/icons-react";
 import { format } from "date-fns";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { Booking, BookingStatus, RoomStatus } from "@prisma/client";

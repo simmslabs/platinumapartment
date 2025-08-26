@@ -20,7 +20,7 @@ import {
   ActionIcon,
 } from "@mantine/core";
 import { IconArrowLeft, IconDeviceFloppy, IconAlertCircle, IconPlus, IconTrash } from "@tabler/icons-react";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { RoomType, PricingPeriod, AssetCategory, AssetCondition } from "@prisma/client";

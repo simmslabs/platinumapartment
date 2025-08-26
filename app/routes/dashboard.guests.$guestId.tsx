@@ -43,7 +43,7 @@ import {
 } from "@tabler/icons-react";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 
 export const meta: MetaFunction = () => {
   return [

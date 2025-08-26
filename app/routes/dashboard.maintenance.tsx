@@ -21,7 +21,7 @@ import {
 } from "@mantine/core";
 import { IconPlus, IconInfoCircle, IconTool, IconTrash, IconSearch, IconFilter, IconDots } from "@tabler/icons-react";
 import { format } from "date-fns";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { MaintenanceLog, MaintenanceStatus } from "@prisma/client";

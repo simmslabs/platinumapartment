@@ -27,7 +27,7 @@ import {
   IconBed,
   IconMapPin,
 } from "@tabler/icons-react";
-import { DashboardLayout } from "~/components/DashboardLayout";
+import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import { format } from "date-fns";
