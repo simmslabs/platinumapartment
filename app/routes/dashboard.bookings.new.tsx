@@ -196,16 +196,16 @@ export async function action({ request }: ActionFunctionArgs) {
     // Send confirmation emails
     try {
       // Guest confirmation email
-      await emailService.sendBookingConfirmation({
-        firstName: newBooking.user.firstName,
-        lastName: newBooking.user.lastName,
-        email: newBooking.user.email,
-        roomNumber: newBooking.room.number,
-        checkIn: format(checkIn, "MMM dd, yyyy"),
-        checkOut: format(checkOut, "MMM dd, yyyy"),
-        totalAmount: totalAmount,
-        bookingId: newBooking.id,
-      });
+      // await emailService.sendBookingConfirmation({
+      //   firstName: newBooking.user.firstName,
+      //   lastName: newBooking.user.lastName,
+      //   email: newBooking.user.email,
+      //   roomNumber: newBooking.room.number,
+      //   checkIn: format(checkIn, "MMM dd, yyyy"),
+      //   checkOut: format(checkOut, "MMM dd, yyyy"),
+      //   totalAmount: totalAmount,
+      //   bookingId: newBooking.id,
+      // });
 
       // SMS notification if phone number exists
       if (newBooking.user.phone) {

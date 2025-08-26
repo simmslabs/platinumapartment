@@ -242,16 +242,16 @@ export async function action({ request }: ActionFunctionArgs) {
     // 4. Guest must have a valid phone number in their profile
     try {
       // Guest payment confirmation email
-      await emailService.sendBookingConfirmation({
-        firstName: booking.user.firstName,
-        lastName: booking.user.lastName,
-        email: booking.user.email,
-        roomNumber: booking.room.number,
-        checkIn: format(new Date(booking.checkIn), "MMM dd, yyyy"),
-        checkOut: format(new Date(booking.checkOut), "MMM dd, yyyy"),
-        totalAmount: booking.totalAmount,
-        bookingId: booking.id,
-      });
+      // await emailService.sendBookingConfirmation({
+      //   firstName: booking.user.firstName,
+      //   lastName: booking.user.lastName,
+      //   email: booking.user.email,
+      //   roomNumber: booking.room.number,
+      //   checkIn: format(new Date(booking.checkIn), "MMM dd, yyyy"),
+      //   checkOut: format(new Date(booking.checkOut), "MMM dd, yyyy"),
+      //   totalAmount: booking.totalAmount,
+      //   bookingId: booking.id,
+      // });
 
       // Guest SMS payment confirmation
       if (booking.user.phone) {
