@@ -1,4 +1,4 @@
-import { uploadToR2, deleteFromR2, extractR2Key, isR2Configured, validateImage } from "./r2.server";
+import { uploadToR2, isR2Configured, validateImage } from "./r2.server";
 
 export interface ImageProcessResult {
   success: boolean;
@@ -87,13 +87,9 @@ export async function deleteImage(imageUrl: string): Promise<{ success: boolean;
     return { success: true }; // Nothing to delete
   }
 
-  // Check if it's an R2 URL
-  const r2Key = extractR2Key(imageUrl);
-  if (r2Key) {
-    return await deleteFromR2(r2Key);
-  }
-
-  // For base64 data, just return success (no physical file to delete)
+  // For base64 storage, deletion is handled by removing the database reference
+  // No physical file deletion is needed
+  console.log(`Image deletion requested for: ${imageUrl.substring(0, 50)}...`);
   return { success: true };
 }
 
@@ -244,7 +240,8 @@ export function getImageInfo(imageUrl: string): {
   type?: string;
 } {
   const isBase64 = imageUrl.startsWith('data:');
-  const isR2 = !isBase64 && extractR2Key(imageUrl) !== null;
+  // For base64-only mode, R2 is never used
+  const isR2 = false;
 
   let estimatedSize: number | undefined;
   let type: string | undefined;
