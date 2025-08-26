@@ -111,9 +111,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     db.review.aggregate({ _avg: { rating: true } }),
     
     // Room type stats
-    db.room.groupBy({
-      by: ["type"],
-      _count: { type: true },
+    db.roomType.findMany({
+      include: {
+        _count: {
+          select: { rooms: true }
+        }
+      }
     }),
     
     // Recent bookings
@@ -196,7 +199,7 @@ export default function Analytics() {
               <ThemeIcon size="xl" variant="light" color="blue">
                 <IconCalendar size={24} />
               </ThemeIcon>
-              <div style={{ textAlign: "right" }}>
+              <div className="text-right">
                 {(() => {
                   const change = formatChange(stats.changes.bookings);
                   return (
@@ -223,7 +226,7 @@ export default function Analytics() {
               <ThemeIcon size="xl" variant="light" color="green">
                 <IconCurrencyDollar size={24} />
               </ThemeIcon>
-              <div style={{ textAlign: "right" }}>
+              <div className="text-right">
                 {(() => {
                   const change = formatChange(stats.changes.revenue);
                   return (
@@ -287,12 +290,12 @@ export default function Analytics() {
           </Title>
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
             {stats.roomTypes.map((roomType) => (
-              <div key={roomType.type}>
+              <div key={roomType.id}>
                 <Text fw={500} mb="xs">
-                  {roomType.type.replace("_", " ")}
+                  {roomType.displayName}
                 </Text>
                 <Text size="xl" fw={700} c="blue">
-                  {roomType._count.type}
+                  {roomType._count.rooms}
                 </Text>
                 <Text size="sm" c="dimmed">
                   rooms
@@ -319,7 +322,7 @@ export default function Analytics() {
                       Room {booking.room.number}
                     </Text>
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div className="text-right">
                     <Badge size="sm" color="green">
                       ₵{booking.totalAmount}
                     </Badge>

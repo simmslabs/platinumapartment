@@ -15,7 +15,6 @@ import {
   Text,
   Card,
   TextInput,
-  ActionIcon,
   Grid,
   Flex,
   Textarea,
@@ -38,7 +37,8 @@ import { format } from "date-fns";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { SecurityDeposit, Booking, User, Room } from "@prisma/client";
+import type { SecurityDeposit, Booking, User, Room, PaymentMethod, SecurityDepositStatus } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { useState, useEffect } from "react";
 
 export const meta: MetaFunction = () => {
@@ -64,10 +64,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const search = url.searchParams.get("search");
 
   // Build where clause for filtering
-  const where: any = {};
+  const where: Prisma.SecurityDepositWhereInput = {};
   
   if (status && status !== "all") {
-    where.status = status;
+    where.status = status as SecurityDepositStatus;
   }
 
   if (search) {
@@ -76,15 +76,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         booking: {
           user: {
             OR: [
-              { firstName: { contains: search, mode: "insensitive" } },
-              { lastName: { contains: search, mode: "insensitive" } },
-              { email: { contains: search, mode: "insensitive" } },
+              { firstName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+              { lastName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+              { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
             ],
           },
         },
       },
       {
-        transactionId: { contains: search, mode: "insensitive" },
+        transactionId: { contains: search, mode: Prisma.QueryMode.insensitive },
       },
     ];
   }
@@ -106,22 +106,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { createdAt: "desc" },
   });
 
-  // Get bookings without security deposits (checked out bookings)
-  const checkedOutBookings = await db.booking.findMany({
-    where: {
-      securityDeposit: null,
-      status: "CHECKED_OUT",
-    },
-    include: {
-      user: {
-        select: { firstName: true, lastName: true, email: true },
-      },
-      room: {
-        select: { number: true },
-      },
-    },
-  });
-
   // Get bookings that need security deposits (confirmed but not paid)
   const pendingDeposits = await db.booking.findMany({
     where: {
@@ -141,7 +125,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({ 
     user, 
     securityDeposits, 
-    checkedOutBookings, 
     pendingDeposits 
   });
 }
@@ -156,7 +139,7 @@ export async function action({ request }: ActionFunctionArgs) {
     if (intent === "collect") {
       const bookingId = formData.get("bookingId") as string;
       const amount = parseFloat(formData.get("amount") as string);
-      const method = formData.get("method") as any;
+      const method = formData.get("method") as PaymentMethod;
       const transactionId = formData.get("transactionId") as string;
 
       if (!bookingId || !amount || !method) {
@@ -221,14 +204,14 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Security deposit action error:", error);
     return json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }
 
 export default function SecurityDeposits() {
-  const { user, securityDeposits, checkedOutBookings, pendingDeposits } = useLoaderData<typeof loader>();
+  const { user, securityDeposits, pendingDeposits } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [collectOpened, { open: openCollect, close: closeCollect }] = useDisclosure(false);
   const [refundOpened, { open: openRefund, close: closeRefund }] = useDisclosure(false);
@@ -315,7 +298,7 @@ export default function SecurityDeposits() {
     setSearchParams({});
   };
 
-  const openRefundModal = (deposit: any) => {
+  const openRefundModal = (deposit: typeof securityDeposits[0]) => {
     // Convert serialized dates back to Date objects for state management
     const convertedDeposit: SecurityDepositWithDetails = {
       ...deposit,
@@ -329,6 +312,7 @@ export default function SecurityDeposits() {
         updatedAt: deposit.booking.updatedAt ? new Date(deposit.booking.updatedAt) : new Date(),
         checkIn: deposit.booking.checkIn ? new Date(deposit.booking.checkIn) : new Date(),
         checkOut: deposit.booking.checkOut ? new Date(deposit.booking.checkOut) : new Date(),
+        deletedAt: deposit.booking.deletedAt ? new Date(deposit.booking.deletedAt) : null,
       },
     };
     setSelectedDeposit(convertedDeposit);

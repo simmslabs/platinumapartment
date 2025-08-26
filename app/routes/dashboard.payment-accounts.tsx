@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form } from "@remix-run/react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Title,
   Table,
@@ -19,14 +19,10 @@ import {
   Switch,
   NumberInput,
   SimpleGrid,
-  Paper,
   ThemeIcon,
-  Progress,
   Tabs,
   Textarea,
   Divider,
-  RingProgress,
-  Center,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { 
@@ -37,7 +33,6 @@ import {
   IconCreditCard,
   IconWallet,
   IconTrendingUp,
-  IconTrendingDown,
   IconArrowUpRight,
   IconArrowDownRight,
   IconCurrencyDollar,
@@ -46,11 +41,11 @@ import {
   IconBrandPaypal,
   IconBuildingBank,
 } from "@tabler/icons-react";
-import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { PaymentAccount } from "@prisma/client";
+import type { PaymentAccount, PaymentAccountType, PaymentProvider } from "@prisma/client";
 
 export const meta: MetaFunction = () => {
   return [
@@ -82,20 +77,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Get analytics data
   const now = new Date();
-  const thirtyDaysAgo = subDays(now, 30);
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
-
-  // Transaction statistics
-  const totalTransactions = await db.transaction.count();
-  const monthlyTransactions = await db.transaction.count({
-    where: {
-      createdAt: {
-        gte: monthStart,
-        lte: monthEnd,
-      },
-    },
-  });
 
   // Transaction volume by status
   const transactionsByStatus = await db.transaction.groupBy({
@@ -236,8 +219,8 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     if (intent === "create") {
       const accountName = formData.get("accountName") as string;
-      const type = formData.get("type") as any;
-      const provider = formData.get("provider") as any;
+      const type = formData.get("type") as PaymentAccountType;
+      const provider = formData.get("provider") as PaymentProvider;
       const accountNumber = formData.get("accountNumber") as string;
       const bankName = formData.get("bankName") as string;
       const isActive = formData.get("isActive") === "on";
@@ -275,8 +258,8 @@ export async function action({ request }: ActionFunctionArgs) {
     if (intent === "update") {
       const id = formData.get("id") as string;
       const accountName = formData.get("accountName") as string;
-      const type = formData.get("type") as any;
-      const provider = formData.get("provider") as any;
+      const type = formData.get("type") as PaymentAccountType;
+      const provider = formData.get("provider") as PaymentProvider;
       const accountNumber = formData.get("accountNumber") as string;
       const bankName = formData.get("bankName") as string;
       const isActive = formData.get("isActive") === "on";
@@ -388,7 +371,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const transferNumber = `TXN-${Date.now()}`;
       
       // Debit transaction (outgoing)
-      const debitTransaction = await db.transaction.create({
+      await db.transaction.create({
         data: {
           transactionNumber: `${transferNumber}-OUT`,
           userId,
@@ -407,7 +390,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       // Credit transaction (incoming)
-      const creditTransaction = await db.transaction.create({
+      await db.transaction.create({
         data: {
           transactionNumber: `${transferNumber}-IN`,
           userId,
@@ -431,7 +414,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Payment account action error:", error);
     return json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
@@ -442,7 +425,7 @@ export default function PaymentAccounts() {
   const actionData = useActionData<typeof action>();
   const [opened, { open, close }] = useDisclosure(false);
   const [transferOpened, { open: openTransfer, close: closeTransfer }] = useDisclosure(false);
-  const [editingAccount, setEditingAccount] = useState<any>(null);
+  const [editingAccount, setEditingAccount] = useState<PaymentAccount | null>(null);
   const [transferData, setTransferData] = useState({
     fromAccountId: "",
     toAccountId: "", 
@@ -487,8 +470,14 @@ export default function PaymentAccounts() {
     }
   };
 
-  const handleEdit = (account: any) => {
-    setEditingAccount(account);
+  const handleEdit = (account: typeof paymentAccounts[0]) => {
+    // Convert serialized dates back to Date objects
+    const accountWithDates: PaymentAccount = {
+      ...account,
+      createdAt: new Date(account.createdAt),
+      updatedAt: new Date(account.updatedAt),
+    };
+    setEditingAccount(accountWithDates);
     open();
   };
 
@@ -504,19 +493,19 @@ export default function PaymentAccounts() {
     }
   };
 
-  const handleModalClose = () => {
+  const handleModalClose = React.useCallback(() => {
     setEditingAccount(null);
     close();
-  };
+  }, [close]);
 
-  const handleTransferClose = () => {
+  const handleTransferClose = React.useCallback(() => {
     setTransferData({
       fromAccountId: "",
       toAccountId: "",
       amount: "",
     });
     closeTransfer();
-  };
+  }, [closeTransfer]);
 
   // Validate transfer data client-side
   const isTransferValid = () => {
@@ -532,7 +521,7 @@ export default function PaymentAccounts() {
       handleModalClose();
       handleTransferClose();
     }
-  }, [actionData]);
+  }, [actionData, handleModalClose, handleTransferClose]);
 
   // Helper function to format currency
   const formatCurrency = (amount: number) => {
@@ -777,9 +766,6 @@ export default function PaymentAccounts() {
                 <Title order={4} mb="md">Transaction Status</Title>
                 <Stack gap="sm">
                   {analytics.transactionsByStatus.map((item) => {
-                    const total = analytics.totalCount;
-                    const count = item._count.id;
-                    const percentage = total > 0 ? (count / total) * 100 : 0;
                     return (
                       <Group key={item.status} justify="space-between">
                         <Group gap="sm">
@@ -877,7 +863,7 @@ export default function PaymentAccounts() {
                             {stats.totalCount} transactions
                           </Text>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
+                        <div className="text-right">
                           <Text size="sm" fw={500}>
                             {formatCurrency(stats.totalVolume)}
                           </Text>
