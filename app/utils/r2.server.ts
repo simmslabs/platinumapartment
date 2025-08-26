@@ -58,12 +58,15 @@ export async function uploadToR2(
   fileName: string,
   folder: string = 'uploads'
 ): Promise<UploadResult> {
-  if (!r2Client) {
+  if (!r2Client || !isR2Configured()) {
     return {
       success: false,
       error: "R2 client not configured. Check environment variables."
     };
   }
+
+  // Type assertion since we know R2_BUCKET_NAME is defined if isR2Configured() returns true
+  const bucketName = R2_BUCKET_NAME as string;
 
   try {
     let buffer: Buffer;
@@ -99,7 +102,7 @@ export async function uploadToR2(
 
     // Upload to R2
     const command = new PutObjectCommand({
-      Bucket: R2_BUCKET_NAME,
+      Bucket: bucketName,
       Key: key,
       Body: buffer,
       ContentType: contentType,
@@ -144,16 +147,19 @@ export async function uploadToR2(
  * @returns Promise with deletion result
  */
 export async function deleteFromR2(key: string): Promise<{ success: boolean; error?: string }> {
-  if (!r2Client) {
+  if (!r2Client || !isR2Configured()) {
     return {
       success: false,
       error: "R2 client not configured"
     };
   }
 
+  // Type assertion since we know R2_BUCKET_NAME is defined if isR2Configured() returns true
+  const bucketName = R2_BUCKET_NAME as string;
+
   try {
     const command = new DeleteObjectCommand({
-      Bucket: R2_BUCKET_NAME,
+      Bucket: bucketName,
       Key: key,
     });
 
@@ -179,16 +185,19 @@ export async function generatePresignedUrl(
   key: string,
   expiresIn: number = 3600
 ): Promise<{ success: boolean; url?: string; error?: string }> {
-  if (!r2Client) {
+  if (!r2Client || !isR2Configured()) {
     return {
       success: false,
       error: "R2 client not configured"
     };
   }
 
+  // Type assertion since we know R2_BUCKET_NAME is defined if isR2Configured() returns true
+  const bucketName = R2_BUCKET_NAME as string;
+
   try {
     const command = new PutObjectCommand({
-      Bucket: R2_BUCKET_NAME,
+      Bucket: bucketName,
       Key: key,
     });
 
@@ -231,9 +240,11 @@ export function extractR2Key(url: string): string | null {
  * @returns boolean indicating if R2 is ready to use
  */
 export function isR2Configured(): boolean {
-  // Temporarily disable R2 to test base64 fallback
-  return false;
-  // return r2Client !== null;
+  return r2Client !== null && 
+         Boolean(R2_ACCOUNT_ID) && 
+         Boolean(R2_ACCESS_KEY_ID) && 
+         Boolean(R2_SECRET_ACCESS_KEY) && 
+         Boolean(R2_BUCKET_NAME);
 }
 
 /**
