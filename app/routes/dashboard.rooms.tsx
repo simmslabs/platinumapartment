@@ -12,20 +12,17 @@ import {
   Group,
   Modal,
   TextInput,
-  NumberInput,
   Select,
-  Textarea,
   Alert,
   Paper,
   Divider,
-  Flex,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconEdit, IconInfoCircle, IconFilter, IconSearch, IconTrash, IconBuilding } from "@tabler/icons-react";
+import { IconPlus, IconEdit, IconInfoCircle, IconFilter, IconSearch, IconTrash, IconBuilding, IconBox } from "@tabler/icons-react";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Room } from "@prisma/client";
+import type { Room, AssetCondition, RoomType, PricingPeriod, RoomStatus } from "@prisma/client";
 import { useState, useMemo, useEffect } from "react";
 
 export const meta: MetaFunction = () => {
@@ -42,6 +39,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const rooms = await db.room.findMany({
     include: {
       blockRelation: true,
+      assets: {
+        orderBy: [
+          { category: "asc" },
+          { name: "asc" }
+        ]
+      },
     },
     orderBy: { number: "asc" },
   });
@@ -61,12 +64,12 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     if (intent === "create") {
       const number = formData.get("number") as string;
-      const type = formData.get("type") as any;
+      const type = formData.get("type") as RoomType;
       const block = formData.get("block") as string;
       const floorStr = formData.get("floor") as string;
       const capacityStr = formData.get("capacity") as string;
       const pricePerNightStr = formData.get("pricePerNight") as string;
-      const pricingPeriod = (formData.get("pricingPeriod") as any) || "NIGHT";
+      const pricingPeriod = (formData.get("pricingPeriod") as PricingPeriod) || "NIGHT";
       const description = formData.get("description") as string;
 
       // Validate required fields
@@ -138,7 +141,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "update-status") {
       const roomId = formData.get("roomId") as string;
-      const status = formData.get("status") as any;
+      const status = formData.get("status") as RoomStatus;
 
       await db.room.update({
         where: { id: roomId },
@@ -219,11 +222,12 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Room action error:", error);
-    if (error.code === "P2002") {
+    // Type guard to check if it's a Prisma error
+    if (error && typeof error === 'object' && 'code' in error && error.code === "P2002") {
       // Check which constraint failed
-      if (error.meta?.target?.includes('number') && error.meta?.target?.includes('blockId')) {
+      if (error && 'meta' in error && error.meta && typeof error.meta === 'object' && 'target' in error.meta && Array.isArray(error.meta.target) && error.meta.target.includes('number') && error.meta.target.includes('blockId')) {
         return json({ error: "Room number already exists in this block" }, { status: 400 });
       }
       return json({ error: "Room number already exists" }, { status: 400 });
@@ -233,14 +237,15 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Rooms() {
-  const { user, rooms, blocks } = useLoaderData<typeof loader>();
+  const { user, rooms } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
-  const [opened, { open, close }] = useDisclosure(false);
   const [blockModalOpened, { open: openBlockModal, close: closeBlockModal }] = useDisclosure(false);
+  const [assetsModalOpened, { open: openAssetsModal, close: closeAssetsModal }] = useDisclosure(false);
   const [editingBlock, setEditingBlock] = useState<string | null>(null);
   const [deletingBlock, setDeletingBlock] = useState<string | null>(null);
   const [creatingBlock, setCreatingBlock] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState<(typeof rooms)[0] | null>(null);
   const location = useLocation();
   
   // Filter states
@@ -250,10 +255,6 @@ export default function Rooms() {
   const [blockFilter, setBlockFilter] = useState<string | null>(null);
   const [floorFilter, setFloorFilter] = useState<string | null>(null);
   const [capacityFilter, setCapacityFilter] = useState<string | null>(null);
-  
-  // Pricing period state for dynamic form updates
-  const [selectedPricingPeriod, setSelectedPricingPeriod] = useState<string>("NIGHT");
-  const [basePrice, setBasePrice] = useState<number>(0);
 
   // Helper functions for pricing periods
   const getPeriodLabel = (period: string) => {
@@ -267,39 +268,9 @@ export default function Rooms() {
     }
   };
 
-  const getPeriodMultiplier = (period: string) => {
-    switch (period) {
-      case "NIGHT": return 1;
-      case "DAY": return 1;
-      case "WEEK": return 7;
-      case "MONTH": return 30;
-      case "YEAR": return 365;
-      default: return 1;
-    }
-  };
-
-  const calculateEquivalentPrice = (price: number, fromPeriod: string, toPeriod: string) => {
-    const fromMultiplier = getPeriodMultiplier(fromPeriod);
-    const toMultiplier = getPeriodMultiplier(toPeriod);
-    return (price / fromMultiplier) * toMultiplier;
-  };
-
   const formatPriceWithPeriod = (price: number, period: string) => {
     const label = getPeriodLabel(period);
     return `₵${price.toLocaleString()}/${label}`;
-  };
-
-  // Reset form when modal opens
-  const handleModalOpen = () => {
-    setSelectedPricingPeriod("NIGHT");
-    setBasePrice(0);
-    open();
-  };
-
-  const handleModalClose = () => {
-    setSelectedPricingPeriod("NIGHT");
-    setBasePrice(0);
-    close();
   };
 
   // Get unique values for filter options
@@ -384,14 +355,14 @@ export default function Rooms() {
 
   // Close modals on successful action
   useEffect(() => {
-    if (actionData?.success) {
+    if (actionData && 'success' in actionData) {
       close();
       closeBlockModal();
       setEditingBlock(null);
       setDeletingBlock(null);
       setCreatingBlock(false);
     }
-  }, [actionData?.success, close, closeBlockModal]);
+  }, [actionData, closeBlockModal]);
 
   // Group rooms by blocks for better organization
   const roomsByBlock = useMemo(() => {
@@ -433,6 +404,26 @@ export default function Rooms() {
     }
   };
 
+  const getAssetConditionColor = (condition: AssetCondition) => {
+    switch (condition) {
+      case "EXCELLENT":
+        return "green";
+      case "GOOD":
+        return "blue";
+      case "FAIR":
+        return "yellow";
+      case "POOR":
+        return "orange";
+      case "DAMAGED":
+      case "BROKEN":
+        return "red";
+      case "MISSING":
+        return "gray";
+      default:
+        return "gray";
+    }
+  };
+
   if(location.pathname !== "/dashboard/rooms") return <Outlet />
 
   return (
@@ -460,7 +451,10 @@ export default function Rooms() {
                 >
                   Create Block
                 </Button>
-                <Button leftSection={<IconPlus size={16} />} onClick={handleModalOpen}>
+                <Button 
+                  leftSection={<IconPlus size={16} />} 
+                  onClick={() => navigate("/dashboard/rooms/new")}
+                >
                   Add Room
                 </Button>
               </>
@@ -530,23 +524,23 @@ export default function Rooms() {
           </Paper>
         )}
 
-        {actionData?.error && (
+        {actionData && 'error' in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Error"
             color="red"
           >
-            {actionData.error}
+            {'error' in actionData ? actionData.error : ''}
           </Alert>
         )}
 
-        {actionData?.success && (
+        {actionData && 'success' in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Success"
             color="green"
           >
-            {actionData.success}
+            {'success' in actionData ? actionData.success : ''}
           </Alert>
         )}
 
@@ -730,12 +724,27 @@ export default function Rooms() {
                         </Stack>
 
                         <Group justify="space-between" mt="md">
-                          <Button size="xs" variant="light" onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/dashboard/rooms/${room.id}`);
-                          }}>
-                            View Details
-                          </Button>
+                          <Group gap="xs">
+                            <Button size="xs" variant="light" onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/dashboard/rooms/${room.id}`);
+                            }}>
+                              View Details
+                            </Button>
+                            
+                            <Button 
+                              size="xs" 
+                              variant="outline" 
+                              leftSection={<IconBox size={14} />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRoom(room);
+                                openAssetsModal();
+                              }}
+                            >
+                              Assets ({room.assets?.length || 0})
+                            </Button>
+                          </Group>
                           
                           {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
                             <Form method="post" onClick={(e) => e.stopPropagation()}>
@@ -775,127 +784,7 @@ export default function Rooms() {
           </Stack>
         )}
 
-        <Modal opened={opened} onClose={handleModalClose} title="Add New Room" size="lg">
-          <Form method="post">
-            <input type="hidden" name="intent" value="create" />
-            <Stack>
-              <TextInput
-                label="Room Number"
-                placeholder="101"
-                name="number"
-                required
-              />
-
-              <Select
-                label="Room Type"
-                placeholder="Select type"
-                name="type"
-                data={[
-                  { value: "SINGLE", label: "Single" },
-                  { value: "DOUBLE", label: "Double" },
-                  { value: "SUITE", label: "Suite" },
-                  { value: "DELUXE", label: "Deluxe" },
-                  { value: "PRESIDENTIAL", label: "Presidential" },
-                ]}
-                required
-              />
-
-              <Select
-                label="Block"
-                placeholder="Select existing block or create new one"
-                name="block"
-                data={blocks.map(block => ({ 
-                  value: block.name, 
-                  label: `Block ${block.name} - ${block.description || 'No description'}` 
-                }))}
-                required
-                searchable
-                creatable
-                getCreateLabel={(query) => `+ Create Block "${query}"`}
-              />
-
-              <Group grow>
-                <NumberInput
-                  label="Floor"
-                  placeholder="1"
-                  name="floor"
-                  min={1}
-                  required
-                />
-                <NumberInput
-                  label="Capacity"
-                  placeholder="2"
-                  name="capacity"
-                  min={1}
-                  required
-                />
-              </Group>
-
-              <Group grow>
-                <Select
-                  label="Pricing Period"
-                  placeholder="Select pricing period"
-                  name="pricingPeriod"
-                  value={selectedPricingPeriod}
-                  onChange={(value) => setSelectedPricingPeriod(value || "NIGHT")}
-                  data={[
-                    { value: "NIGHT", label: "Per Night" },
-                    { value: "DAY", label: "Per Day" },
-                    { value: "WEEK", label: "Per Week" },
-                    { value: "MONTH", label: "Per Month" },
-                    { value: "YEAR", label: "Per Year" },
-                  ]}
-                  required
-                />
-                <NumberInput
-                  label={`Price per ${getPeriodLabel(selectedPricingPeriod)} (₵)`}
-                  placeholder="100.00"
-                  name="pricePerNight"
-                  min={0}
-                  step="0.01"
-                  value={basePrice}
-                  onChange={(value) => setBasePrice(Number(value) || 0)}
-                  required
-                />
-              </Group>
-
-              {/* Price Conversion Display */}
-              {basePrice > 0 && (
-                <Paper p="sm" withBorder bg="gray.0">
-                  <Text size="sm" fw={500} mb="xs">Equivalent Pricing:</Text>
-                  <Group gap="md">
-                    {["NIGHT", "DAY", "WEEK", "MONTH", "YEAR"]
-                      .filter(period => period !== selectedPricingPeriod)
-                      .map(period => (
-                        <Text key={period} size="xs" c="dimmed">
-                          {formatPriceWithPeriod(
-                            calculateEquivalentPrice(basePrice, selectedPricingPeriod, period),
-                            period
-                          )}
-                        </Text>
-                      ))}
-                  </Group>
-                </Paper>
-              )}
-
-              <Textarea
-                label="Description"
-                placeholder="Room description..."
-                name="description"
-                rows={3}
-              />
-
-              <Group justify="flex-end">
-                <Button variant="outline" onClick={close}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  Add Room
-                </Button>
-              </Group>
-            </Stack>
-          </Form>
-        </Modal>
+        {/* Room creation has been moved to /dashboard/rooms/new route */}
 
         {/* Block Management Modal */}
         <Modal 
@@ -998,7 +887,7 @@ export default function Rooms() {
               <input type="hidden" name="blockName" value={deletingBlock} />
               <Stack>
                 <Alert color="red" icon={<IconInfoCircle size={16} />}>
-                  Are you sure you want to delete block "{deletingBlock}"? This action cannot be undone.
+                  Are you sure you want to delete block &quot;{deletingBlock}&quot;? This action cannot be undone.
                 </Alert>
                 
                 {blockStats.find(b => b.name === deletingBlock)?.total === 0 ? (
@@ -1062,6 +951,109 @@ export default function Rooms() {
 
               <Group justify="flex-end">
                 <Button onClick={closeBlockModal}>
+                  Close
+                </Button>
+              </Group>
+            </Stack>
+          )}
+        </Modal>
+
+        {/* Assets Modal */}
+        <Modal 
+          opened={assetsModalOpened} 
+          onClose={closeAssetsModal} 
+          title={selectedRoom ? `Assets in Room ${selectedRoom.number}` : "Room Assets"} 
+          size="xl"
+        >
+          {selectedRoom && (
+            <Stack gap="md">
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">
+                  Total Assets: {selectedRoom.assets?.length || 0}
+                </Text>
+                {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+                  <Button 
+                    size="xs" 
+                    leftSection={<IconPlus size={14} />}
+                    onClick={() => navigate(`/dashboard/rooms/${selectedRoom.id}/assets/new`)}
+                  >
+                    Add Asset
+                  </Button>
+                )}
+              </Group>
+
+              {selectedRoom.assets && selectedRoom.assets.length > 0 ? (
+                <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                  {selectedRoom.assets.map((asset) => (
+                    <Card key={asset.id} withBorder>
+                      <Group justify="space-between" mb="xs">
+                        <Text fw={500}>{asset.name}</Text>
+                        <Badge 
+                          color={getAssetConditionColor(asset.condition)}
+                          size="sm"
+                        >
+                          {asset.condition}
+                        </Badge>
+                      </Group>
+                      
+                      <Stack gap="xs">
+                        <Group gap="xs">
+                          <Text size="sm" c="dimmed">Category:</Text>
+                          <Badge variant="light" size="xs">
+                            {asset.category.replace('_', ' ')}
+                          </Badge>
+                        </Group>
+                        
+                        <Group gap="xs">
+                          <Text size="sm" c="dimmed">Quantity:</Text>
+                          <Text size="sm">{asset.quantity}</Text>
+                        </Group>
+                        
+                        {asset.description && (
+                          <Text size="sm" c="dimmed">{asset.description}</Text>
+                        )}
+                        
+                        {asset.serialNumber && (
+                          <Group gap="xs">
+                            <Text size="sm" c="dimmed">Serial:</Text>
+                            <Text size="sm" ff="monospace">{asset.serialNumber}</Text>
+                          </Group>
+                        )}
+                        
+                        {asset.lastInspected && (
+                          <Group gap="xs">
+                            <Text size="sm" c="dimmed">Last Inspected:</Text>
+                            <Text size="sm">
+                              {new Date(asset.lastInspected).toLocaleDateString()}
+                            </Text>
+                          </Group>
+                        )}
+                        
+                        {asset.notes && (
+                          <Text size="xs" c="orange" style={{ fontStyle: 'italic' }}>
+                            Note: {asset.notes}
+                          </Text>
+                        )}
+                      </Stack>
+                      
+                      {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+                        <Group justify="flex-end" mt="md">
+                          <Button size="xs" variant="light" leftSection={<IconEdit size={12} />}>
+                            Edit
+                          </Button>
+                        </Group>
+                      )}
+                    </Card>
+                  ))}
+                </SimpleGrid>
+              ) : (
+                <Text ta="center" c="dimmed" py="xl">
+                  No assets found for this room
+                </Text>
+              )}
+              
+              <Group justify="flex-end">
+                <Button onClick={closeAssetsModal}>
                   Close
                 </Button>
               </Group>

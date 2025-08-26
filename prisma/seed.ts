@@ -16,8 +16,9 @@ async function main() {
   await prisma.service.deleteMany();
   await prisma.maintenanceLog.deleteMany();
   await prisma.booking.deleteMany();
-  await prisma.block.deleteMany();
+  await prisma.roomAsset.deleteMany(); // Delete room assets before rooms
   await prisma.room.deleteMany();
+  await prisma.block.deleteMany();
   await prisma.paymentMethodConfig.deleteMany();
   await prisma.paymentAccount.deleteMany();
   await prisma.user.deleteMany();
@@ -300,6 +301,265 @@ async function main() {
       },
     }),
   ]);
+
+  console.log('Created rooms');
+
+  // Create room assets
+  const roomAssets = [];
+
+  // Common assets for each room
+  for (const room of rooms) {
+    // Basic furniture
+    roomAssets.push(
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'King Size Bed',
+          category: 'FURNITURE',
+          quantity: room.type === 'SINGLE' ? 1 : room.type === 'DOUBLE' ? 1 : 2,
+          condition: 'GOOD',
+          description: 'Comfortable king size bed with premium mattress',
+          purchaseDate: new Date('2023-01-15'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Wardrobe',
+          category: 'FURNITURE',
+          quantity: 1,
+          condition: 'EXCELLENT',
+          description: 'Large wooden wardrobe with mirrors',
+          purchaseDate: new Date('2023-01-15'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Study Desk',
+          category: 'FURNITURE',
+          quantity: 1,
+          condition: 'GOOD',
+          description: 'Modern wooden desk with chair',
+          purchaseDate: new Date('2023-01-15'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Bedside Tables',
+          category: 'FURNITURE',
+          quantity: 2,
+          condition: 'GOOD',
+          description: 'Matching bedside tables with drawers',
+          purchaseDate: new Date('2023-01-15'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      })
+    );
+
+    // Electronics
+    roomAssets.push(
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: '55" Smart TV',
+          category: 'ELECTRONICS',
+          quantity: 1,
+          condition: 'EXCELLENT',
+          description: 'Samsung 55-inch 4K Smart TV',
+          serialNumber: `TV-${room.number}-2024`,
+          purchaseDate: new Date('2024-03-01'),
+          warrantyExpiry: new Date('2027-03-01'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Air Conditioner',
+          category: 'ELECTRONICS',
+          quantity: 1,
+          condition: room.status === 'MAINTENANCE' ? 'POOR' : 'GOOD',
+          description: 'Split AC unit with remote control',
+          serialNumber: `AC-${room.number}-2023`,
+          purchaseDate: new Date('2023-06-01'),
+          warrantyExpiry: new Date('2026-06-01'),
+          lastInspected: new Date('2024-11-15'),
+          notes: room.status === 'MAINTENANCE' ? 'Requires maintenance - cooling efficiency reduced' : null,
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Mini Refrigerator',
+          category: 'ELECTRONICS',
+          quantity: 1,
+          condition: 'GOOD',
+          description: 'Compact refrigerator with freezer compartment',
+          serialNumber: `RF-${room.number}-2023`,
+          purchaseDate: new Date('2023-05-01'),
+          warrantyExpiry: new Date('2026-05-01'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      })
+    );
+
+    // Bathroom assets
+    roomAssets.push(
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Shower',
+          category: 'BATHROOM',
+          quantity: 1,
+          condition: 'GOOD',
+          description: 'Modern shower with glass enclosure',
+          lastInspected: new Date('2024-11-20'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Toilet',
+          category: 'BATHROOM',
+          quantity: 1,
+          condition: 'GOOD',
+          description: 'Modern ceramic toilet with soft-close seat',
+          lastInspected: new Date('2024-11-20'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Bathroom Mirror',
+          category: 'BATHROOM',
+          quantity: 1,
+          condition: 'EXCELLENT',
+          description: 'Large wall-mounted mirror with LED lighting',
+          lastInspected: new Date('2024-12-01'),
+        },
+      })
+    );
+
+    // Bedding
+    roomAssets.push(
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Mattress',
+          category: 'BEDDING',
+          quantity: room.type === 'SINGLE' ? 1 : room.type === 'DOUBLE' ? 1 : 2,
+          condition: 'GOOD',
+          description: 'Premium memory foam mattress',
+          purchaseDate: new Date('2023-08-01'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Pillows',
+          category: 'BEDDING',
+          quantity: (room.type === 'SINGLE' ? 1 : room.type === 'DOUBLE' ? 1 : 2) * 2,
+          condition: 'GOOD',
+          description: 'Premium down pillows',
+          purchaseDate: new Date('2024-01-01'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Bed Sheets Set',
+          category: 'BEDDING',
+          quantity: 2,
+          condition: 'GOOD',
+          description: 'High-quality cotton bed sheets with pillowcases',
+          purchaseDate: new Date('2024-02-01'),
+          lastInspected: new Date('2024-12-01'),
+        },
+      })
+    );
+
+    // Lighting
+    roomAssets.push(
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Ceiling Light',
+          category: 'LIGHTING',
+          quantity: 1,
+          condition: 'EXCELLENT',
+          description: 'Modern LED ceiling light with dimmer',
+          lastInspected: new Date('2024-12-01'),
+        },
+      }),
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Bedside Lamps',
+          category: 'LIGHTING',
+          quantity: 2,
+          condition: 'GOOD',
+          description: 'Matching bedside table lamps',
+          lastInspected: new Date('2024-12-01'),
+        },
+      })
+    );
+
+    // Safety equipment
+    roomAssets.push(
+      prisma.roomAsset.create({
+        data: {
+          roomId: room.id,
+          name: 'Smoke Detector',
+          category: 'SAFETY',
+          quantity: 1,
+          condition: 'EXCELLENT',
+          description: 'Battery-powered smoke detector',
+          lastInspected: new Date('2024-12-01'),
+        },
+      })
+    );
+
+    // Add kitchenette items for suites and deluxe rooms
+    if (room.type === 'SUITE' || room.type === 'DELUXE') {
+      roomAssets.push(
+        prisma.roomAsset.create({
+          data: {
+            roomId: room.id,
+            name: 'Microwave',
+            category: 'KITCHEN',
+            quantity: 1,
+            condition: 'GOOD',
+            description: 'Compact microwave oven',
+            serialNumber: `MW-${room.number}-2023`,
+            purchaseDate: new Date('2023-09-01'),
+            warrantyExpiry: new Date('2025-09-01'),
+            lastInspected: new Date('2024-12-01'),
+          },
+        }),
+        prisma.roomAsset.create({
+          data: {
+            roomId: room.id,
+            name: 'Kitchenette Set',
+            category: 'KITCHEN',
+            quantity: 1,
+            condition: 'GOOD',
+            description: 'Basic kitchenette with sink, plates, and utensils',
+            lastInspected: new Date('2024-12-01'),
+          },
+        })
+      );
+    }
+  }
+
+  await Promise.all(roomAssets);
+  console.log('Created room assets');
 
   // Create services
   const services = await Promise.all([

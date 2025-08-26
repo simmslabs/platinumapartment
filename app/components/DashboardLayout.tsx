@@ -45,17 +45,11 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
   useEffect(() => {
     const calculateCheckouts = async () => {
       try {
-        console.log('Fetching checkout status...');
         const response = await fetch('/api/checkout-status');
-        console.log('Response status:', response.status);
         if (response.ok) {
           const data = await response.json();
-          console.log('Checkout data:', data);
           const total = data.overdueCount + data.upcomingCount;
-          console.log('Setting checkout count to:', total);
           setCheckoutCount(total);
-        } else {
-          console.error('API response not ok:', response.status);
         }
       } catch (error) {
         console.error('Failed to fetch checkout status:', error);
@@ -77,7 +71,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
       label: "Monitoring", 
       link: "/dashboard/monitoring", 
       hasSubmenu: true,
-      badge: checkoutCount > 0 ? checkoutCount.toString() : "0", // Show 0 for debugging
+      badge: checkoutCount > 0 ? checkoutCount.toString() : undefined,
       isActive: location.pathname.includes("/monitoring")
     },
     { icon: IconBed, label: "Rooms", link: "/dashboard/rooms", isActive: location.pathname.includes("/rooms") },

@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, Link, Outlet, useLocation } from "@remix-run/react";
 import {
   Title,
   Table,
@@ -8,121 +8,29 @@ import {
   Button,
   Stack,
   Group,
-  Modal,
   Select,
-  NumberInput,
-  Textarea,
   Alert,
   Text,
   Card,
   TextInput,
   ActionIcon,
+  Menu,
 } from "@mantine/core";
-import { DateInput } from "@mantine/dates";
-import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconEdit, IconInfoCircle, IconTrash, IconSearch, IconRestore } from "@tabler/icons-react";
+import { IconPlus, IconInfoCircle, IconTrash, IconSearch, IconDots, IconEye } from "@tabler/icons-react";
 import { format } from "date-fns";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Booking, Room, User } from "@prisma/client";
+import type { Booking, BookingStatus, RoomStatus } from "@prisma/client";
 import { emailService } from "~/utils/email.server";
+import { mnotifyService } from "~/utils/mnotify.server";
 import { useState, useMemo } from "react";
-
-// Helper function to calculate checkout date based on periods with 24-hour periods
-const calculateCheckoutDate = (checkInDate: Date, periods: number, pricingPeriod: string): Date => {
-  const checkout = new Date(checkInDate);
-  
-  switch (pricingPeriod) {
-    case 'NIGHT':
-    case 'DAY':
-      // Use exactly 24 hours per period (24 * 60 * 60 * 1000 milliseconds)
-      checkout.setTime(checkout.getTime() + (periods * 24 * 60 * 60 * 1000));
-      break;
-    case 'WEEK':
-      // Use exactly 7 * 24 hours per week
-      checkout.setTime(checkout.getTime() + (periods * 7 * 24 * 60 * 60 * 1000));
-      break;
-    case 'MONTH':
-      // For months, use calendar months but preserve the exact time
-      checkout.setMonth(checkout.getMonth() + periods);
-      break;
-    case 'YEAR':
-      // For years, use calendar years but preserve the exact time
-      checkout.setFullYear(checkout.getFullYear() + periods);
-      break;
-    default:
-      // Default to 24-hour periods
-      checkout.setTime(checkout.getTime() + (periods * 24 * 60 * 60 * 1000));
-  }
-  
-  return checkout;
-};
-
-// Helper function to get pricing period display
-const getPricingPeriodDisplay = (period: string) => {
-  switch (period) {
-    case 'NIGHT': return 'night';
-    case 'DAY': return 'day';
-    case 'WEEK': return 'week';
-    case 'MONTH': return 'month';
-    case 'YEAR': return 'year';
-    default: return 'night';
-  }
-};
-
-// Helper function to calculate equivalent daily rate for comparison
-const calculateDailyEquivalent = (price: number, period: string) => {
-  switch (period) {
-    case 'NIGHT':
-    case 'DAY':
-      return price;
-    case 'WEEK':
-      return price / 7;
-    case 'MONTH':
-      return price / 30;
-    case 'YEAR':
-      return price / 365;
-    default:
-      return price;
-  }
-};
-
-// Helper function to safely format date for form submission
-const formatDateForForm = (date: Date | string | null): string => {
-  if (!date) return '';
-  
-  try {
-    if (date instanceof Date) {
-      return date.toISOString().split('T')[0];
-    } else if (typeof date === 'string') {
-      // If it's already a string, try to parse it as a date first
-      const parsedDate = new Date(date);
-      if (!isNaN(parsedDate.getTime())) {
-        return parsedDate.toISOString().split('T')[0];
-      }
-      return date;
-    } else {
-      const parsedDate = new Date(date);
-      return parsedDate.toISOString().split('T')[0];
-    }
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return '';
-  }
-};
 
 export const meta: MetaFunction = () => {
   return [
     { title: "Bookings - Apartment Management" },
     { name: "description", content: "Manage apartment bookings" },
   ];
-};
-
-type BookingWithDetails = Booking & {
-  user: Pick<User, "firstName" | "lastName" | "email">;
-  room: Pick<Room, "number" | "type" | "block" | "pricingPeriod" | "pricePerNight">;
-  deletedAt?: Date | null;
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -142,7 +50,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     where: bookingFilter,
     include: {
       user: {
-        select: { firstName: true, lastName: true, email: true },
+        select: { firstName: true, lastName: true, email: true, phone: true },
       },
       room: {
         select: { number: true, type: true, block: true, pricingPeriod: true, pricePerNight: true },
@@ -178,7 +86,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const guests = await db.user.findMany({
     where: { role: "GUEST" },
-    select: { id: true, firstName: true, lastName: true, email: true },
+    select: { id: true, firstName: true, lastName: true, email: true, phone: true },
   });
 
   return json({ user, bookings: filteredBookings, availableRooms, guests, showDeleted, paymentStatus });
@@ -319,29 +227,80 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "update-status") {
       const bookingId = formData.get("bookingId") as string;
-      const status = formData.get("status") as any;
+      const status = formData.get("status") as string;
+
+      // Get booking with user and room details before updating
+      const bookingWithDetails = await db.booking.findUnique({
+        where: { id: bookingId },
+        include: { 
+          room: true,
+          user: true 
+        },
+      });
+
+      if (!bookingWithDetails) {
+        return json({ error: "Booking not found" }, { status: 404 });
+      }
 
       await db.booking.update({
         where: { id: bookingId },
-        data: { status },
+        data: { status: status as BookingStatus },
       });
 
       // Update room status based on booking status
-      const booking = await db.booking.findUnique({
-        where: { id: bookingId },
-        include: { room: true },
-      });
-
-      if (booking) {
+      if (bookingWithDetails) {
         let roomStatus = "AVAILABLE";
         if (status === "CHECKED_IN") {
           roomStatus = "OCCUPIED";
         }
         
         await db.room.update({
-          where: { id: booking.roomId },
-          data: { status: roomStatus as any },
+          where: { id: bookingWithDetails.roomId },
+          data: { status: roomStatus as RoomStatus },
         });
+      }
+
+      // Send SMS notifications when booking is confirmed
+      // This feature requires:
+      // 1. MNOTIFY_API_KEY environment variable
+      // 2. MNOTIFY_SENDER_ID environment variable  
+      // 3. ADMIN_PHONE_NUMBER environment variable for admin alerts
+      // 4. Guest must have a valid phone number in their profile
+      if (status === "CONFIRMED") {
+        try {
+          const guestName = `${bookingWithDetails.user.firstName} ${bookingWithDetails.user.lastName}`;
+          const roomNumber = bookingWithDetails.room.number;
+          const checkIn = format(new Date(bookingWithDetails.checkIn), "MMM dd, yyyy");
+          const checkOut = format(new Date(bookingWithDetails.checkOut), "MMM dd, yyyy");
+
+          // Send SMS to guest (if phone number exists)
+          if (bookingWithDetails.user.phone) {
+            await mnotifyService.sendBookingConfirmation(
+              bookingWithDetails.user.phone,
+              guestName,
+              roomNumber,
+              checkIn,
+              checkOut
+            );
+            console.log(`Booking confirmation SMS sent to guest: ${bookingWithDetails.user.phone}`);
+          }
+
+          // Send SMS alert to admin/manager
+          const adminPhone = process.env.ADMIN_PHONE_NUMBER;
+          if (adminPhone) {
+            await mnotifyService.sendStaffAlert(
+              adminPhone,
+              "Admin",
+              "Booking Confirmed",
+              `Booking #${bookingId.slice(-6)} confirmed for ${guestName} in Room ${roomNumber} (${checkIn} - ${checkOut})`
+            );
+            console.log(`Booking confirmation alert sent to admin: ${adminPhone}`);
+          }
+
+        } catch (smsError) {
+          console.error("Failed to send SMS notifications:", smsError);
+          // Don't fail the entire request if SMS fails
+        }
       }
 
       return json({ success: "Booking status updated successfully" });
@@ -455,134 +414,22 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Booking action error:", error);
     return json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }
 
 export default function Bookings() {
-  const { user, bookings, availableRooms, guests, showDeleted, paymentStatus } = useLoaderData<typeof loader>();
+  const { user, bookings, showDeleted, paymentStatus } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const [opened, { open, close }] = useDisclosure(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selectedRoom, setSelectedRoom] = useState<string>("");
-  const [checkInDate, setCheckInDate] = useState<Date | null>(null);
-  const [numberOfPeriods, setNumberOfPeriods] = useState<number>(1);
-
-  // Calculate pricing preview
-  const pricingPreview = useMemo(() => {
-    if (!selectedRoom || !checkInDate || !numberOfPeriods) return null;
-    
-    const room = availableRooms.find(r => r.id === selectedRoom);
-    if (!room) return null;
-
-    // Ensure dates are proper Date objects
-    const checkInDateObj = checkInDate instanceof Date ? checkInDate : new Date(checkInDate);
-    
-    // Validate that check-in date is valid
-    if (isNaN(checkInDateObj.getTime())) return null;
-
-    // Always use periods calculation
-    const periodCount = numberOfPeriods;
-    const totalAmount = numberOfPeriods * room.pricePerNight;
-    
-    let periodName: string;
-    let stayDurationDays: number;
-
-    // Calculate estimated days based on periods
-    switch (room.pricingPeriod) {
-      case 'NIGHT':
-      case 'DAY':
-        periodName = periodCount === 1 ? 'day' : 'days';
-        stayDurationDays = periodCount;
-        break;
-      case 'WEEK':
-        periodName = periodCount === 1 ? 'week' : 'weeks';
-        stayDurationDays = periodCount * 7;
-        break;
-      case 'MONTH':
-        periodName = periodCount === 1 ? 'month' : 'months';
-        stayDurationDays = periodCount * 30;
-        break;
-      case 'YEAR':
-        periodName = periodCount === 1 ? 'year' : 'years';
-        stayDurationDays = periodCount * 365;
-        break;
-      default:
-        periodName = periodCount === 1 ? 'day' : 'days';
-        stayDurationDays = periodCount;
-    }
-
-    const billingUnits = `${periodCount} ${periodName}`;
-    
-    // Calculate checkout date for display
-    const checkOutDate = calculateCheckoutDate(checkInDateObj, numberOfPeriods, room.pricingPeriod || 'NIGHT');
-
-    return {
-      totalAmount,
-      billingUnits,
-      dailyRate: totalAmount / stayDurationDays,
-      period: getPricingPeriodDisplay(room.pricingPeriod || 'NIGHT'),
-      basePrice: room.pricePerNight,
-      periodCount,
-      periodName,
-      stayDurationDays,
-      checkOutDate: checkOutDate.toLocaleString() // Show both date and time
-    };
-  }, [selectedRoom, checkInDate, numberOfPeriods, availableRooms]);
-
-  // Handle modal close and reset form state
-  const handleModalClose = () => {
-    close();
-    setSelectedRoom("");
-    setCheckInDate(null);
-    setNumberOfPeriods(1);
-  };
-
-  // Handle form submission with validation
-  const handleFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    // Client-side validation before submitting
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    
-    const userId = formData.get("userId") as string;
-    const roomId = formData.get("roomId") as string;
-    const checkIn = formData.get("checkIn") as string;
-    const guests = formData.get("guests") as string;
-
-    console.log("Client-side form validation:", { userId, roomId, checkIn, guests, selectedRoom, checkInDate });
-
-    if (!userId) {
-      alert("Please select a guest");
-      event.preventDefault();
-      return false;
-    }
-    if (!roomId || !selectedRoom) {
-      alert("Please select a room");
-      event.preventDefault();
-      return false;
-    }
-    if (!checkIn || !checkInDate) {
-      alert("Please select a check-in date");
-      event.preventDefault();
-      return false;
-    }
-    if (!guests) {
-      alert("Please enter the number of guests");
-      event.preventDefault();
-      return false;
-    }
-
-    // If validation passes, close modal and proceed with submission
-    handleModalClose();
-    return true;
-  };
+  const location = useLocation();
 
   // Filter bookings based on search query and status
   const filteredBookings = useMemo(() => {
-    let filtered = bookings.filter((booking) => {
+    const filtered = bookings.filter((booking) => {
       const matchesSearch = 
         booking.user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.user.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -615,6 +462,8 @@ export default function Bookings() {
     }
   };
 
+  if(location.pathname !== "/dashboard/bookings") return <Outlet />
+
   return (
     <DashboardLayout user={user}>
       <Stack>
@@ -623,7 +472,11 @@ export default function Bookings() {
             {user?.role === "GUEST" ? "My Bookings" : "Bookings Management"}
           </Title>
           {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
-            <Button leftSection={<IconPlus size={16} />} onClick={open}>
+            <Button 
+              component={Link}
+              to="/dashboard/bookings/new"
+              leftSection={<IconPlus size={16} />}
+            >
               New Booking
             </Button>
           )}
@@ -933,108 +786,136 @@ export default function Bookings() {
                   </Table.Td>
                   {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
                     <Table.Td>
-                      <Group gap="xs">
-                        {!booking.deletedAt ? (
-                          <>
-                            <Form method="post" style={{ display: "inline" }}>
-                              <input type="hidden" name="intent" value="update-status" />
-                              <input type="hidden" name="bookingId" value={booking.id} />
-                              <Select
-                                name="status"
-                                size="xs"
-                                data={[
-                                  { value: "PENDING", label: "Pending" },
-                                  { value: "CONFIRMED", label: "Confirmed" },
-                                  { value: "CHECKED_IN", label: "Checked In" },
-                                  { value: "CHECKED_OUT", label: "Checked Out" },
-                                  { value: "CANCELLED", label: "Cancelled" },
-                                ]}
-                                defaultValue={booking.status}
-                                onChange={(value) => {
-                                  if (value) {
-                                    const form = new FormData();
-                                    form.append("intent", "update-status");
-                                    form.append("bookingId", booking.id);
-                                    form.append("status", value);
-                                    fetch("/dashboard/bookings", {
-                                      method: "POST",
-                                      body: form,
-                                    }).then(() => window.location.reload());
-                                  }
-                                }}
-                              />
-                            </Form>
-                            {booking.status === "PENDING" && !booking.payment && (
-                              <Button
-                                component="a"
-                                href={`/dashboard/payments?bookingId=${booking.id}`}
-                                variant="outline"
-                                color="green"
-                                size="xs"
-                                leftSection={<IconPlus size={12} />}
+                      <Menu shadow="md" width={200}>
+                        <Menu.Target>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            size="sm"
+                            title="Actions"
+                          >
+                            <IconDots size={16} />
+                          </ActionIcon>
+                        </Menu.Target>
+
+                        <Menu.Dropdown>
+                          {!booking.deletedAt ? (
+                            <>
+                              <Menu.Item
+                                component={Link}
+                                to={`/dashboard/bookings/${booking.id}`}
+                                leftSection={<IconEye size={14} />}
+                                color="blue"
                               >
-                                Record Payment
-                              </Button>
-                            )}
-                            {["PENDING", "CANCELLED"].includes(booking.status) && (
+                                View Details
+                              </Menu.Item>
+                              
+                              <Menu.Divider />
+                              <Menu.Label>Status</Menu.Label>
                               <Form method="post" style={{ display: "inline" }}>
-                                <input type="hidden" name="intent" value="delete" />
+                                <input type="hidden" name="intent" value="update-status" />
                                 <input type="hidden" name="bookingId" value={booking.id} />
-                                <ActionIcon
-                                  variant="subtle"
+                                <Select
+                                  name="status"
+                                  size="xs"
+                                  data={[
+                                    { value: "PENDING", label: "Pending" },
+                                    { value: "CONFIRMED", label: "Confirmed" },
+                                    { value: "CHECKED_IN", label: "Checked In" },
+                                    { value: "CHECKED_OUT", label: "Checked Out" },
+                                    { value: "CANCELLED", label: "Cancelled" },
+                                  ]}
+                                  defaultValue={booking.status}
+                                  onChange={(value) => {
+                                    if (value) {
+                                      const form = new FormData();
+                                      form.append("intent", "update-status");
+                                      form.append("bookingId", booking.id);
+                                      form.append("status", value);
+                                      fetch("/dashboard/bookings", {
+                                        method: "POST",
+                                        body: form,
+                                      }).then(() => window.location.reload());
+                                    }
+                                  }}
+                                />
+                              </Form>
+                              
+                              <Menu.Divider />
+                              <Menu.Label>Actions</Menu.Label>
+                              
+                              {booking.status === "PENDING" && !booking.payment && (
+                                <Menu.Item
+                                  component="a"
+                                  href={`/dashboard/payments?bookingId=${booking.id}`}
+                                  leftSection={<IconPlus size={14} />}
+                                  color="green"
+                                >
+                                  Record Payment
+                                </Menu.Item>
+                              )}
+                              
+                              {["PENDING", "CANCELLED"].includes(booking.status) && (
+                                <Menu.Item
                                   color="orange"
-                                  type="submit"
-                                  size="sm"
-                                  title="Soft Delete (can be restored)"
-                                  onClick={(e) => {
-                                    if (!confirm("Are you sure you want to delete this booking? It can be restored later.")) {
-                                      e.preventDefault();
+                                  leftSection={<IconTrash size={14} />}
+                                  onClick={() => {
+                                    if (confirm("Are you sure you want to delete this booking? It can be restored later.")) {
+                                      const form = new FormData();
+                                      form.append("intent", "delete");
+                                      form.append("bookingId", booking.id);
+                                      fetch("/dashboard/bookings", {
+                                        method: "POST",
+                                        body: form,
+                                      }).then(() => window.location.reload());
                                     }
                                   }}
                                 >
-                                  <IconTrash size={14} />
-                                </ActionIcon>
-                              </Form>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <Form method="post" style={{ display: "inline" }}>
-                              <input type="hidden" name="intent" value="restore" />
-                              <input type="hidden" name="bookingId" value={booking.id} />
-                              <Button
-                                variant="subtle"
+                                  Delete Booking
+                                </Menu.Item>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Menu.Label>Deleted Booking</Menu.Label>
+                              <Menu.Item
                                 color="green"
-                                type="submit"
-                                size="xs"
-                                title="Restore booking"
+                                onClick={() => {
+                                  const form = new FormData();
+                                  form.append("intent", "restore");
+                                  form.append("bookingId", booking.id);
+                                  fetch("/dashboard/bookings", {
+                                    method: "POST",
+                                    body: form,
+                                  }).then(() => window.location.reload());
+                                }}
                               >
-                                Restore
-                              </Button>
-                            </Form>
-                            {user?.role === "ADMIN" && (
-                              <Form method="post" style={{ display: "inline" }}>
-                                <input type="hidden" name="intent" value="hard-delete" />
-                                <input type="hidden" name="bookingId" value={booking.id} />
-                                <ActionIcon
-                                  variant="subtle"
+                                Restore Booking
+                              </Menu.Item>
+                              
+                              {user?.role === "ADMIN" && (
+                                <Menu.Item
                                   color="red"
-                                  type="submit"
-                                  size="sm"
-                                  title="Permanently Delete (cannot be restored)"
-                                  onClick={(e) => {
-                                    if (!confirm("Are you sure you want to PERMANENTLY delete this booking? This action cannot be undone.")) {
-                                      e.preventDefault();
+                                  leftSection={<IconTrash size={14} />}
+                                  onClick={() => {
+                                    if (confirm("Are you sure you want to PERMANENTLY delete this booking? This action cannot be undone.")) {
+                                      const form = new FormData();
+                                      form.append("intent", "hard-delete");
+                                      form.append("bookingId", booking.id);
+                                      fetch("/dashboard/bookings", {
+                                        method: "POST",
+                                        body: form,
+                                      }).then(() => window.location.reload());
                                     }
                                   }}
                                 >
-                                  <IconTrash size={14} />
-                                </ActionIcon>
-                              </Form>
-                            )}
-                          </>
-                        )}
-                      </Group>
+                                  Permanently Delete
+                                </Menu.Item>
+                              )}
+                            </>
+                          )}
+                        </Menu.Dropdown>
+                      </Menu>
                     </Table.Td>
                   )}
                 </Table.Tr>
@@ -1044,131 +925,6 @@ export default function Bookings() {
           </Table>
           </Table.ScrollContainer>
         </Card>
-
-        <Modal opened={opened} onClose={handleModalClose} title="Create New Booking" size="lg">
-          <Form method="post" onSubmit={handleFormSubmit}>
-            <input type="hidden" name="intent" value="create" />
-            <input type="hidden" name="numberOfPeriods" value={numberOfPeriods.toString()} />
-            {/* Hidden inputs for controlled form fields - always render with empty fallback */}
-            <input type="hidden" name="roomId" value={selectedRoom || ''} />
-            <input type="hidden" name="checkIn" value={checkInDate ? formatDateForForm(checkInDate) : ''} />
-            {/* Debug info - remove in production */}
-            <div style={{ display: 'none' }}>
-              Debug: selectedRoom={selectedRoom}, checkInDate={checkInDate?.toString()}, numberOfPeriods={numberOfPeriods}
-            </div>
-            <Stack>
-              <Select
-                label="Guest"
-                placeholder="Select guest"
-                name="userId"
-                data={guests.map(guest => ({
-                  value: guest.id,
-                  label: `${guest.firstName} ${guest.lastName} (${guest.email})`
-                }))}
-                required
-                searchable
-              />
-
-              <Select
-                label="Room"
-                placeholder="Select room"
-                value={selectedRoom}
-                onChange={(value) => setSelectedRoom(value || "")}
-                data={availableRooms.map(room => {
-                  const periodDisplay = getPricingPeriodDisplay(room.pricingPeriod || 'NIGHT');
-                  const dailyEquivalent = calculateDailyEquivalent(room.pricePerNight, room.pricingPeriod || 'NIGHT');
-                  return {
-                    value: room.id,
-                    label: `Room ${room.number} (Block ${room.block}) - ${room.type.replace('_', ' ')} - ₵${room.pricePerNight}/${periodDisplay} (≈₵${dailyEquivalent.toFixed(2)}/day)`
-                  };
-                })}
-                required
-                searchable
-              />
-
-              <Group grow>
-                <DateInput
-                  label="Check-in Date"
-                  placeholder="Select date"
-                  value={checkInDate}
-                  onChange={(date: Date | null) => setCheckInDate(date)}
-                  required
-                  minDate={new Date()}
-                  valueFormat="YYYY-MM-DD"
-                />
-                <NumberInput
-                  label={`Number of ${selectedRoom ? getPricingPeriodDisplay(availableRooms.find(r => r.id === selectedRoom)?.pricingPeriod || 'NIGHT') + 's' : 'periods'}`}
-                  placeholder="1"
-                  value={numberOfPeriods}
-                  onChange={(value) => setNumberOfPeriods(typeof value === 'number' ? value : 1)}
-                  min={1}
-                  required
-                  description={pricingPreview?.checkOutDate ? `Check-out: ${pricingPreview.checkOutDate}` : ''}
-                />
-              </Group>
-
-              {/* Pricing Preview */}
-              {pricingPreview && (
-                <Card withBorder p="md" bg="gray.0">
-                  <Stack gap="xs">
-                    <Text size="sm" fw={500} c="blue">Booking Summary</Text>
-                    <Group justify="space-between">
-                      <Text size="sm" c="dimmed">Stay Duration:</Text>
-                      <Text size="sm">{pricingPreview.stayDurationDays} {pricingPreview.stayDurationDays === 1 ? 'day' : 'days'}</Text>
-                    </Group>
-                    <Group justify="space-between">
-                      <Text size="sm" c="dimmed">Billing Periods:</Text>
-                      <Text size="sm" fw={500}>{pricingPreview.periodCount} {pricingPreview.periodName}</Text>
-                    </Group>
-                    <Group justify="space-between">
-                      <Text size="sm" c="dimmed">Rate per {pricingPreview.period}:</Text>
-                      <Text size="sm">₵{pricingPreview.basePrice}</Text>
-                    </Group>
-                    <Group justify="space-between">
-                      <Text size="sm" c="dimmed">Daily equivalent:</Text>
-                      <Text size="sm">₵{pricingPreview.dailyRate.toFixed(2)}/day</Text>
-                    </Group>
-                    {pricingPreview.period !== 'day' && pricingPreview.period !== 'night' && (
-                      <Alert color="blue" variant="light" p="xs">
-                        <Text size="xs">
-                          Fixed pricing: You pay the full {pricingPreview.period} rate even for partial periods
-                        </Text>
-                      </Alert>
-                    )}
-                    <Group justify="space-between">
-                      <Text fw={500}>Total Amount:</Text>
-                      <Text fw={500} c="blue">₵{pricingPreview.totalAmount.toFixed(2)}</Text>
-                    </Group>
-                  </Stack>
-                </Card>
-              )}
-
-              <NumberInput
-                label="Number of Guests"
-                placeholder="2"
-                name="guests"
-                min={1}
-                required
-              />
-
-              <Textarea
-                label="Special Requests"
-                placeholder="Any special requests..."
-                name="specialRequests"
-                rows={3}
-              />
-
-              <Group justify="flex-end">
-                <Button variant="outline" onClick={handleModalClose}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  Create Booking
-                </Button>
-              </Group>
-            </Stack>
-          </Form>
-        </Modal>
       </Stack>
     </DashboardLayout>
   );

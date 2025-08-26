@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, Link, useParams } from "@remix-run/react";
+import { useLoaderData, Link, useSearchParams } from "@remix-run/react";
 import {
   Title,
   Stack,
@@ -18,11 +18,11 @@ import {
   Timeline,
   Alert,
   NumberFormatter,
+  Notification,
 } from "@mantine/core";
 import { format, differenceInDays, startOfYear, endOfYear } from "date-fns";
 import {
   IconUser,
-  IconCreditCard,
   IconCalendar,
   IconTrendingUp,
   IconTrendingDown,
@@ -35,6 +35,9 @@ import {
   IconReceipt,
   IconChartBar,
   IconInfoCircle,
+  IconPlus,
+  IconEdit,
+  IconCheck,
 } from "@tabler/icons-react";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -170,7 +173,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export default function GuestDetails() {
-  const { user, guest, stats } = useLoaderData<typeof loader>();
+  const { guest, stats } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const success = searchParams.get("success");
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -205,22 +210,57 @@ export default function GuestDetails() {
   return (
     <Stack>
       {/* Header */}
-      <Group>
-        <Button
-          component={Link}
-          to="/dashboard/guests"
-          leftSection={<IconArrowLeft size={16} />}
-          variant="subtle"
-        >
-          Back to Guests
-        </Button>
-        <Title order={2}>
-          {guest.firstName} {guest.lastName} - Guest Details
-        </Title>
-        <Badge color={loyaltyTier.color} size="lg">
-          {loyaltyTier.tier} Member
-        </Badge>
+      <Group justify="space-between">
+        <Group>
+          <Button
+            component={Link}
+            to="/dashboard/guests"
+            leftSection={<IconArrowLeft size={16} />}
+            variant="subtle"
+          >
+            Back to Guests
+          </Button>
+          <Title order={2}>
+            {guest.firstName} {guest.lastName} - Guest Details
+          </Title>
+          <Badge color={loyaltyTier.color} size="lg">
+            {loyaltyTier.tier} Member
+          </Badge>
+        </Group>
+        <Group gap="sm">
+          <Button
+            component={Link}
+            to={`/dashboard/guests/new?guestId=${guest.id}`}
+            leftSection={<IconEdit size={16} />}
+            variant="light"
+          >
+            Edit Guest
+          </Button>
+          <Button
+            component={Link}
+            to={`/dashboard/bookings/new?guestId=${guest.id}`}
+            leftSection={<IconPlus size={16} />}
+            variant="filled"
+          >
+            Add Booking
+          </Button>
+        </Group>
       </Group>
+
+      {success === "guest-updated" && (
+        <Notification
+          icon={<IconCheck size={18} />}
+          color="green"
+          title="Success"
+          onClose={() => {
+            const url = new URL(window.location);
+            url.searchParams.delete("success");
+            window.history.replaceState({}, "", url);
+          }}
+        >
+          Guest information has been updated successfully.
+        </Notification>
+      )}
 
         {/* Guest Information */}
         <Grid>

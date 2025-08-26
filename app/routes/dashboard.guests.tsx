@@ -20,7 +20,6 @@ import {
   ThemeIcon,
   NumberFormatter,
   FileInput,
-  Progress,
   List,
 } from "@mantine/core";
 import { format } from "date-fns";
@@ -259,20 +258,14 @@ export default function Guests() {
   const { user, guests, stats } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
-  const [opened, { open, close }] = useDisclosure(false);
-  const [editOpened, { open: openEdit, close: closeEdit }] = useDisclosure(false);
   const [importOpened, { open: openImport, close: closeImport }] = useDisclosure(false);
-  const [editingGuest, setEditingGuest] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [importFile, setImportFile] = useState<File | null>(null);
 
-  // Check if we're in a subroute (guest details page)
-  const isInSubroute = location.pathname !== "/dashboard/guests";
-
   // Filter guests based on search query and status
   const filteredGuests = useMemo(() => {
-    let filtered = guests.filter((guest) => {
+    const filtered = guests.filter((guest) => {
       const matchesSearch = 
         guest.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         guest.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -288,11 +281,6 @@ export default function Guests() {
 
     return filtered;
   }, [guests, searchQuery, filterStatus]);
-
-  const handleEdit = (guest: any) => {
-    setEditingGuest(guest);
-    openEdit();
-  };
 
   const handleDownloadTemplate = async () => {
     try {
@@ -339,10 +327,10 @@ export default function Guests() {
     }
   };
 
+  if(location.pathname !== "/dashboard/guests") return <Outlet />
+
   return (
     <DashboardLayout user={user}>
-      {/* Show main route content only when not in subroute */}
-      {!isInSubroute && (
         <Stack>
           <Group justify="space-between">
             <Title order={2}>Guests Management</Title>
@@ -355,7 +343,11 @@ export default function Guests() {
                 >
                   Import Guests
                 </Button>
-                <Button leftSection={<IconPlus size={16} />} onClick={open}>
+                <Button 
+                  component={Link}
+                  to="/dashboard/guests/new"
+                  leftSection={<IconPlus size={16} />}
+                >
                   Add Guest
                 </Button>
               </Group>
@@ -590,7 +582,8 @@ export default function Guests() {
                           <ActionIcon
                             variant="subtle"
                             color="blue"
-                            onClick={() => handleEdit(guest)}
+                            component={Link}
+                            to={`/dashboard/guests/new?guestId=${guest.id}`}
                           >
                             <IconEdit size={16} />
                           </ActionIcon>
@@ -620,116 +613,6 @@ export default function Guests() {
             </Table>
             </Table.ScrollContainer>
           </Card>
-
-          {/* Add Guest Modal */}
-          <Modal opened={opened} onClose={close} title="Add New Guest" size="lg">
-            <Form method="post">
-              <input type="hidden" name="intent" value="create" />
-              <Stack>
-                <Group grow>
-                  <TextInput
-                    label="First Name"
-                    placeholder="John"
-                    name="firstName"
-                    required
-                  />
-                  <TextInput
-                    label="Last Name"
-                    placeholder="Doe"
-                    name="lastName"
-                    required
-                  />
-                </Group>
-
-                <TextInput
-                  label="Email"
-                  placeholder="john.doe@example.com"
-                  name="email"
-                  type="email"
-                  required
-                />
-
-                <TextInput
-                  label="Phone"
-                  placeholder="+1234567890"
-                  name="phone"
-                />
-
-                <TextInput
-                  label="Address"
-                  placeholder="123 Main Street, City"
-                  name="address"
-                />
-
-                <Group justify="flex-end">
-                  <Button variant="outline" onClick={close}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" onClick={close}>
-                    Add Guest
-                  </Button>
-                </Group>
-              </Stack>
-            </Form>
-          </Modal>
-
-          {/* Edit Guest Modal */}
-          <Modal opened={editOpened} onClose={closeEdit} title="Edit Guest" size="lg">
-            {editingGuest && (
-              <Form method="post">
-                <input type="hidden" name="intent" value="update" />
-                <input type="hidden" name="guestId" value={editingGuest.id} />
-                <Stack>
-                  <Group grow>
-                    <TextInput
-                      label="First Name"
-                      placeholder="John"
-                      name="firstName"
-                      defaultValue={editingGuest.firstName}
-                      required
-                    />
-                    <TextInput
-                      label="Last Name"
-                      placeholder="Doe"
-                      name="lastName"
-                      defaultValue={editingGuest.lastName}
-                      required
-                    />
-                  </Group>
-
-                  <TextInput
-                    label="Email"
-                    value={editingGuest.email}
-                    disabled
-                    description="Email cannot be changed"
-                  />
-
-                  <TextInput
-                    label="Phone"
-                    placeholder="+1234567890"
-                    name="phone"
-                    defaultValue={editingGuest.phone || ""}
-                  />
-
-                  <TextInput
-                    label="Address"
-                    placeholder="123 Main Street, City"
-                    name="address"
-                    defaultValue={editingGuest.address || ""}
-                  />
-
-                  <Group justify="flex-end">
-                    <Button variant="outline" onClick={closeEdit}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" onClick={closeEdit}>
-                      Update Guest
-                    </Button>
-                  </Group>
-                </Stack>
-              </Form>
-            )}
-          </Modal>
 
           {/* Import Guests Modal */}
           <Modal opened={importOpened} onClose={closeImport} title="Import Guests from Excel" size="lg">
@@ -816,10 +699,6 @@ export default function Guests() {
             </Stack>
           </Modal>
         </Stack>
-      )}
-      
-      {/* Outlet for nested routes - always render */}
-      <Outlet />
     </DashboardLayout>
   );
 }

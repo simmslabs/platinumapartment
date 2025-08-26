@@ -12,16 +12,19 @@ datasource db {
 
 // User Management
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  firstName String
-  lastName  String
-  role      UserRole @default(GUEST)
-  phone     String?
-  address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String    @id @default(cuid())
+  email          String    @unique
+  password       String
+  firstName      String
+  lastName       String
+  role           UserRole  @default(GUEST)
+  phone          String?
+  address        String?
+  idCard         String?   // ID card number (nullable for now)
+  gender         Gender?   // Gender field
+  profilePicture String?   // Base64 or URL to profile picture
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relations
   bookings        Booking[]
@@ -35,6 +38,7 @@ model User {
   @@index([email])
   @@index([role])
   @@index([createdAt])
+  @@index([idCard])
 }
 
 enum UserRole {
@@ -42,6 +46,12 @@ enum UserRole {
   MANAGER
   STAFF
   GUEST
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
 }
 
 // Block Management
@@ -85,6 +95,7 @@ model Room {
   blockRelation Block?           @relation(fields: [blockId], references: [id])
   bookings      Booking[]
   maintenance   MaintenanceLog[]
+  assets        RoomAsset[]      // Assets in this room
 
   // Composite unique constraint: room number unique within each block
   @@unique([number, blockId])
@@ -120,6 +131,59 @@ enum PricingPeriod {
   WEEK
   MONTH
   YEAR
+}
+
+// Asset Management
+model RoomAsset {
+  id          String        @id @default(cuid())
+  roomId      String
+  name        String        // Asset name (e.g., "Bed", "TV", "Chair", "Air Conditioner")
+  category    AssetCategory // Category of the asset
+  quantity    Int           @default(1) // Number of this asset in the room
+  condition   AssetCondition @default(GOOD) // Current condition of the asset
+  description String?       // Additional details about the asset
+  serialNumber String?      // Serial number or identifier for tracked items
+  purchaseDate DateTime?    // When the asset was purchased
+  warrantyExpiry DateTime?  // Warranty expiration date
+  lastInspected DateTime?   // Last inspection date
+  notes       String?       // Maintenance notes or observations
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  room        Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  maintenance MaintenanceLog[] // Maintenance tasks for this asset
+
+  // Indexes for better performance
+  @@index([roomId])
+  @@index([category])
+  @@index([condition])
+  @@index([name])
+  @@index([lastInspected])
+  @@index([createdAt])
+}
+
+enum AssetCategory {
+  FURNITURE        // Beds, chairs, tables, wardrobes, etc.
+  ELECTRONICS      // TV, AC, refrigerator, microwave, etc.
+  BATHROOM         // Shower, toilet, sink, mirror, etc.
+  KITCHEN          // Stove, oven, utensils, dishes, etc.
+  BEDDING          // Mattress, pillows, blankets, sheets, etc.
+  LIGHTING         // Lamps, ceiling lights, etc.
+  SAFETY           // Smoke detectors, fire extinguisher, etc.
+  DECORATION       // Artwork, plants, curtains, etc.
+  CLEANING         // Vacuum, cleaning supplies, etc.
+  OTHER            // Miscellaneous items
+}
+
+enum AssetCondition {
+  EXCELLENT        // Like new, perfect condition
+  GOOD            // Good condition, minor wear
+  FAIR            // Shows wear but functional
+  POOR            // Significant wear, needs attention
+  DAMAGED         // Damaged but repairable
+  BROKEN          // Not functional, needs replacement
+  MISSING         // Asset is missing/lost
 }
 
 // Booking Management
@@ -498,6 +562,7 @@ model BookingService {
 model MaintenanceLog {
   id          String            @id @default(cuid())
   roomId      String
+  assetId     String?           // Optional: maintenance can be for specific asset
   type        MaintenanceType
   description String
   status      MaintenanceStatus @default(PENDING)
@@ -512,7 +577,15 @@ model MaintenanceLog {
   updatedAt   DateTime          @updatedAt
 
   // Relations
-  room Room @relation(fields: [roomId], references: [id])
+  room  Room       @relation(fields: [roomId], references: [id])
+  asset RoomAsset? @relation(fields: [assetId], references: [id])
+
+  // Indexes for better performance
+  @@index([roomId])
+  @@index([assetId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
 }
 
 enum MaintenanceType {

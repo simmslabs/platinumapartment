@@ -109,21 +109,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { checkOut: "asc" },
   });
 
-  // Debug logging to help identify issues
-  console.log("Monitoring Dashboard Debug:", {
-    now: now.toISOString(),
-    next2Months: next2Months.toISOString(),
-    upcomingCheckoutsCount: upcomingCheckouts.length,
-    overdueCheckoutsCount: overdueCheckouts.length,
-    todayCheckInsCount: todayCheckIns.length,
-    sampleUpcomingCheckout: upcomingCheckouts[0] ? {
-      id: upcomingCheckouts[0].id,
-      checkOut: upcomingCheckouts[0].checkOut,
-      status: upcomingCheckouts[0].status,
-      user: upcomingCheckouts[0].user.firstName + " " + upcomingCheckouts[0].user.lastName
-    } : null
-  });
-
   return json({ 
     user, 
     upcomingCheckouts, 

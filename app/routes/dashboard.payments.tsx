@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, useSearchParams } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useSearchParams, Outlet, useLocation } from "@remix-run/react";
 import {
   Title,
   Table,
@@ -16,11 +16,16 @@ import {
   Card,
   TextInput,
   ActionIcon,
-  Grid,
   Flex,
+  Paper,
+  SimpleGrid,
+  ThemeIcon,
+  Progress,
+  RingProgress,
+  Center,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconInfoCircle, IconTrash, IconFilter, IconX, IconSearch } from "@tabler/icons-react";
+import { IconPlus, IconInfoCircle, IconTrash, IconFilter, IconX, IconSearch, IconTrendingUp, IconCreditCard, IconCurrencyDollar, IconChartBar, IconChartPie, IconCash, IconCashBanknote, IconReceipt } from "@tabler/icons-react";
 import { format } from "date-fns";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
@@ -357,6 +362,8 @@ export default function Payments() {
   const [opened, { open, close }] = useDisclosure(!!bookingId); // Auto-open if bookingId is provided
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const location = useLocation();
+
   const getStatusColor = (status: Payment["status"]) => {
     switch (status) {
       case "COMPLETED":
@@ -389,6 +396,35 @@ export default function Payments() {
     }
   };
 
+  // Analytics calculations
+  const totalRevenue = payments
+    .filter(p => p.status === "COMPLETED")
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const pendingAmount = payments
+    .filter(p => p.status === "PENDING")
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const completedPayments = payments.filter(p => p.status === "COMPLETED").length;
+  const pendingPayments = payments.filter(p => p.status === "PENDING").length;
+  const failedPayments = payments.filter(p => p.status === "FAILED").length;
+
+  const paymentMethods = payments.reduce((acc, payment) => {
+    acc[payment.method] = (acc[payment.method] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const methodStats = [
+    { method: "CASH", count: paymentMethods.CASH || 0, color: "green" },
+    { method: "CREDIT_CARD", count: paymentMethods.CREDIT_CARD || 0, color: "blue" },
+    { method: "DEBIT_CARD", count: paymentMethods.DEBIT_CARD || 0, color: "cyan" },
+    { method: "MOBILE_MONEY", count: paymentMethods.MOBILE_MONEY || 0, color: "violet" },
+    { method: "BANK_TRANSFER", count: paymentMethods.BANK_TRANSFER || 0, color: "orange" },
+  ];
+
+  const totalPayments = payments.length;
+  const completionRate = totalPayments > 0 ? (completedPayments / totalPayments) * 100 : 0;
+
   const handleFilter = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams);
     if (value && value !== "all") {
@@ -414,6 +450,8 @@ export default function Payments() {
       }).then(() => window.location.reload());
     }
   };
+
+  if(location.pathname !== "/dashboard/payments") return <Outlet />
 
   return (
     <DashboardLayout user={user}>
@@ -443,7 +481,7 @@ export default function Payments() {
             variant="light"
           >
             <Text size="sm" mb="xs">
-              Don't forget to collect security deposits for new bookings. 
+              Don&apos;t forget to collect security deposits for new bookings. 
             </Text>
             <Button
               component="a"
@@ -476,6 +514,157 @@ export default function Payments() {
           </Alert>
         )}
 
+        {/* Analytics Dashboard */}
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
+          <Paper withBorder p="md" radius="md">
+            <Group justify="space-between">
+              <div>
+                <Text c="dimmed" size="sm" fw={500}>
+                  Total Revenue
+                </Text>
+                <Text fw={700} size="xl">
+                  ₵{totalRevenue.toFixed(2)}
+                </Text>
+              </div>
+              <ThemeIcon color="green" size={60} radius="md" variant="light">
+                <IconCurrencyDollar size={30} />
+              </ThemeIcon>
+            </Group>
+          </Paper>
+
+          <Paper withBorder p="md" radius="md">
+            <Group justify="space-between">
+              <div>
+                <Text c="dimmed" size="sm" fw={500}>
+                  Pending Amount
+                </Text>
+                <Text fw={700} size="xl">
+                  ₵{pendingAmount.toFixed(2)}
+                </Text>
+              </div>
+              <ThemeIcon color="yellow" size={60} radius="md" variant="light">
+                <IconTrendingUp size={30} />
+              </ThemeIcon>
+            </Group>
+          </Paper>
+
+          <Paper withBorder p="md" radius="md">
+            <Group justify="space-between">
+              <div>
+                <Text c="dimmed" size="sm" fw={500}>
+                  Completed Payments
+                </Text>
+                <Text fw={700} size="xl">
+                  {completedPayments}
+                </Text>
+              </div>
+              <ThemeIcon color="blue" size={60} radius="md" variant="light">
+                <IconReceipt size={30} />
+              </ThemeIcon>
+            </Group>
+          </Paper>
+
+          <Paper withBorder p="md" radius="md">
+            <Group justify="space-between">
+              <div>
+                <Text c="dimmed" size="sm" fw={500}>
+                  Completion Rate
+                </Text>
+                <Text fw={700} size="xl">
+                  {completionRate.toFixed(1)}%
+                </Text>
+              </div>
+              <ThemeIcon color="teal" size={60} radius="md" variant="light">
+                <IconChartBar size={30} />
+              </ThemeIcon>
+            </Group>
+          </Paper>
+        </SimpleGrid>
+
+        {/* Payment Method Distribution and Status Charts */}
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+          <Paper withBorder p="md" radius="md">
+            <Group mb="md">
+              <IconChartPie size={20} />
+              <Text fw={600}>Payment Methods</Text>
+            </Group>
+            <Stack gap="sm">
+              {methodStats.map((stat) => (
+                <Group key={stat.method} justify="space-between">
+                  <Group>
+                    <ThemeIcon color={stat.color} size="sm" variant="light">
+                      {stat.method === "CASH" ? <IconCash size={14} /> :
+                       stat.method === "CREDIT_CARD" ? <IconCreditCard size={14} /> :
+                       stat.method === "BANK_TRANSFER" ? <IconCashBanknote size={14} /> :
+                       <IconCreditCard size={14} />}
+                    </ThemeIcon>
+                    <Text size="sm" fw={500}>
+                      {stat.method.replace('_', ' ')}
+                    </Text>
+                  </Group>
+                  <Group gap="xs">
+                    <Badge color={stat.color} variant="light" size="sm">
+                      {stat.count}
+                    </Badge>
+                    <Progress
+                      value={totalPayments > 0 ? (stat.count / totalPayments) * 100 : 0}
+                      color={stat.color}
+                      size="sm"
+                      w={80}
+                    />
+                  </Group>
+                </Group>
+              ))}
+            </Stack>
+          </Paper>
+
+          <Paper withBorder p="md" radius="md">
+            <Group mb="md">
+              <IconChartBar size={20} />
+              <Text fw={600}>Payment Status Overview</Text>
+            </Group>
+            <Stack gap="md">
+              <Center>
+                <RingProgress
+                  size={180}
+                  thickness={16}
+                  sections={[
+                    { value: totalPayments > 0 ? (completedPayments / totalPayments) * 100 : 0, color: 'green', tooltip: `Completed: ${completedPayments}` },
+                    { value: totalPayments > 0 ? (pendingPayments / totalPayments) * 100 : 0, color: 'yellow', tooltip: `Pending: ${pendingPayments}` },
+                    { value: totalPayments > 0 ? (failedPayments / totalPayments) * 100 : 0, color: 'red', tooltip: `Failed: ${failedPayments}` },
+                  ]}
+                  label={
+                    <Center>
+                      <div>
+                        <Text ta="center" fw={700} size="xl">
+                          {totalPayments}
+                        </Text>
+                        <Text ta="center" c="dimmed" size="sm">
+                          Total Payments
+                        </Text>
+                      </div>
+                    </Center>
+                  }
+                />
+              </Center>
+              <SimpleGrid cols={3}>
+                <div>
+                  <Text ta="center" size="sm" c="dimmed">Completed</Text>
+                  <Text ta="center" fw={700} c="green">{completedPayments}</Text>
+                </div>
+                <div>
+                  <Text ta="center" size="sm" c="dimmed">Pending</Text>
+                  <Text ta="center" fw={700} c="yellow">{pendingPayments}</Text>
+                </div>
+                <div>
+                  <Text ta="center" size="sm" c="dimmed">Failed</Text>
+                  <Text ta="center" fw={700} c="red">{failedPayments}</Text>
+                </div>
+              </SimpleGrid>
+            </Stack>
+          </Paper>
+        </SimpleGrid>
+
         {/* Filters */}
         <Card>
           <Group mb="md">
@@ -493,52 +682,44 @@ export default function Payments() {
             )}
           </Group>
           
-          <Grid>
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <TextInput
-                placeholder="Search guest, email, or transaction ID"
-                leftSection={<IconSearch size={16} />}
-                value={searchParams.get("search") || ""}
-                onChange={(event) => handleFilter("search", event.currentTarget.value)}
-              />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Select
-                placeholder="Filter by status"
-                value={searchParams.get("status") || "all"}
-                onChange={(value) => handleFilter("status", value || "")}
-                data={[
-                  { value: "all", label: "All Statuses" },
-                  { value: "PENDING", label: "Pending" },
-                  { value: "COMPLETED", label: "Completed" },
-                  { value: "FAILED", label: "Failed" },
-                  { value: "REFUNDED", label: "Refunded" },
-                ]}
-              />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Select
-                placeholder="Filter by method"
-                value={searchParams.get("method") || "all"}
-                onChange={(value) => handleFilter("method", value || "")}
-                data={[
-                  { value: "all", label: "All Methods" },
-                  { value: "CASH", label: "Cash" },
-                  { value: "CREDIT_CARD", label: "Credit Card" },
-                  { value: "DEBIT_CARD", label: "Debit Card" },
-                  { value: "ONLINE", label: "Online Payment" },
-                  { value: "BANK_TRANSFER", label: "Bank Transfer" },
-                ]}
-              />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-              <Flex justify="flex-end" align="center" h="100%">
-                <Text size="sm" c="dimmed">
-                  {payments.length} payment{payments.length !== 1 ? 's' : ''} found
-                </Text>
-              </Flex>
-            </Grid.Col>
-          </Grid>
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
+            <TextInput
+              placeholder="Search guest, email, or transaction ID"
+              leftSection={<IconSearch size={16} />}
+              value={searchParams.get("search") || ""}
+              onChange={(event) => handleFilter("search", event.currentTarget.value)}
+            />
+            <Select
+              placeholder="Filter by status"
+              value={searchParams.get("status") || "all"}
+              onChange={(value) => handleFilter("status", value || "")}
+              data={[
+                { value: "all", label: "All Statuses" },
+                { value: "PENDING", label: "Pending" },
+                { value: "COMPLETED", label: "Completed" },
+                { value: "FAILED", label: "Failed" },
+                { value: "REFUNDED", label: "Refunded" },
+              ]}
+            />
+            <Select
+              placeholder="Filter by method"
+              value={searchParams.get("method") || "all"}
+              onChange={(value) => handleFilter("method", value || "")}
+              data={[
+                { value: "all", label: "All Methods" },
+                { value: "CASH", label: "Cash" },
+                { value: "CREDIT_CARD", label: "Credit Card" },
+                { value: "DEBIT_CARD", label: "Debit Card" },
+                { value: "ONLINE", label: "Online Payment" },
+                { value: "BANK_TRANSFER", label: "Bank Transfer" },
+              ]}
+            />
+            <Flex justify="flex-end" align="center" h="100%">
+              <Text size="sm" c="dimmed">
+                {payments.length} payment{payments.length !== 1 ? 's' : ''} found
+              </Text>
+            </Flex>
+          </SimpleGrid>
         </Card>
 
         <Card>

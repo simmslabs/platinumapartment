@@ -256,7 +256,7 @@ class MNotifyService {
   }
 
   async sendWelcomeMessage(phone: string, guestName: string, roomNumber: string): Promise<MNotifyResponse> {
-    const message = `Welcome to Platinum Apartment, ${guestName}! You're in Room ${roomNumber}. Wi-Fi: ApartmentGuest, Password: welcome123. Reception: +233-XXX-XXXX. Enjoy your stay!`;
+    const message = `Welcome to Platinum Apartment, ${guestName}! You're in Room ${roomNumber}. Wi-Fi: ApartmentGuest, Password: welcome123. Reception: +233-24-123-4567. Enjoy your stay!`;
     
     return await this.sendSMS({
       recipient: phone,
@@ -285,6 +285,44 @@ class MNotifyService {
     }
     
     return results;
+  }
+
+  // Payment notification methods
+  async sendPaymentReceived(
+    phone: string, 
+    guestName: string, 
+    amount: number, 
+    method: string, 
+    roomNumber: string, 
+    checkIn: string, 
+    checkOut: string,
+    transactionId: string
+  ): Promise<MNotifyResponse> {
+    const message = `Dear ${guestName}, your payment of GH₵${amount.toFixed(2)} via ${method} has been received for Room ${roomNumber} (${checkIn} - ${checkOut}). Transaction ID: ${transactionId}. Thank you! - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+      senderId: process.env.MNOTIFY_SENDER_ID
+    });
+  }
+
+  async sendPaymentReceivedAdmin(
+    phone: string,
+    guestName: string,
+    amount: number,
+    method: string,
+    roomNumber: string,
+    bookingId: string,
+    transactionId: string
+  ): Promise<MNotifyResponse> {
+    const message = `Payment Received: ${guestName} paid GH₵${amount.toFixed(2)} via ${method} for Room ${roomNumber}. Booking: ${bookingId.slice(-8)}, Transaction: ${transactionId} - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+      senderId: process.env.MNOTIFY_SENDER_ID
+    });
   }
 }
 

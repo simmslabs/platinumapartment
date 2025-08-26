@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useNavigate, Outlet, useLocation } from "@remix-run/react";
+import { useState, useEffect } from "react";
 import {
   Title,
   Table,
@@ -8,21 +9,22 @@ import {
   Button,
   Stack,
   Group,
-  Modal,
   Select,
-  Textarea,
-  NumberInput,
   Alert,
   Text,
   Card,
+  TextInput,
+  ActionIcon,
+  Modal,
+  Paper,
+  Menu,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconInfoCircle, IconTool } from "@tabler/icons-react";
+import { IconPlus, IconInfoCircle, IconTool, IconTrash, IconSearch, IconFilter, IconDots } from "@tabler/icons-react";
 import { format } from "date-fns";
 import { DashboardLayout } from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { MaintenanceLog, Room } from "@prisma/client";
+import type { MaintenanceLog, MaintenanceStatus } from "@prisma/client";
 
 export const meta: MetaFunction = () => {
   return [
@@ -31,29 +33,27 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-type MaintenanceWithRoom = MaintenanceLog & {
-  room: Pick<Room, "number" | "type">;
-};
-
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
-
+  
   const maintenanceLogs = await db.maintenanceLog.findMany({
     include: {
       room: {
         select: { number: true, type: true },
       },
+      asset: {
+        select: { 
+          name: true, 
+          category: true, 
+          condition: true 
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  const rooms = await db.room.findMany({
-    select: { id: true, number: true, type: true },
-    orderBy: { number: "asc" },
-  });
-
-  return json({ user, maintenanceLogs, rooms });
+  return json({ user, maintenanceLogs });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -62,48 +62,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const intent = formData.get("intent") as string;
 
   try {
-    if (intent === "create") {
-      const roomId = formData.get("roomId") as string;
-      const type = formData.get("type") as any;
-      const description = formData.get("description") as string;
-      const priority = formData.get("priority") as any;
-      const reportedBy = formData.get("reportedBy") as string;
-      const assignedTo = formData.get("assignedTo") as string;
-      const cost = formData.get("cost") ? parseFloat(formData.get("cost") as string) : null;
-
-      if (!roomId || !type || !description || !priority) {
-        return json({ error: "All required fields must be filled" }, { status: 400 });
-      }
-
-      await db.maintenanceLog.create({
-        data: {
-          roomId,
-          type,
-          description,
-          priority,
-          reportedBy: reportedBy || null,
-          assignedTo: assignedTo || null,
-          cost,
-          status: "PENDING",
-        },
-      });
-
-      // Update room status to maintenance if it's a critical issue
-      if (priority === "CRITICAL" || priority === "HIGH") {
-        await db.room.update({
-          where: { id: roomId },
-          data: { status: "MAINTENANCE" },
-        });
-      }
-
-      return json({ success: "Maintenance task created successfully" });
-    }
-
     if (intent === "update-status") {
       const maintenanceId = formData.get("maintenanceId") as string;
-      const status = formData.get("status") as any;
+      const status = formData.get("status") as MaintenanceStatus;
 
-      const updateData: any = { status };
+      const updateData: { status: MaintenanceStatus; startDate?: Date; endDate?: Date } = { status };
       
       if (status === "IN_PROGRESS") {
         updateData.startDate = new Date();
@@ -128,23 +91,88 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ success: "Maintenance status updated successfully" });
     }
 
+    if (intent === "delete") {
+      const maintenanceId = formData.get("maintenanceId") as string;
+
+      if (!maintenanceId) {
+        return json({ error: "Maintenance ID is required" }, { status: 400 });
+      }
+
+      // Get the maintenance log to check if it's safe to delete
+      const maintenanceLog = await db.maintenanceLog.findUnique({
+        where: { id: maintenanceId },
+        include: { room: true },
+      });
+
+      if (!maintenanceLog) {
+        return json({ error: "Maintenance task not found" }, { status: 404 });
+      }
+
+      // Only allow deletion if the task is PENDING or CANCELLED
+      if (maintenanceLog.status === "IN_PROGRESS" || maintenanceLog.status === "COMPLETED") {
+        return json({ 
+          error: "Cannot delete maintenance tasks that are in progress or completed" 
+        }, { status: 400 });
+      }
+
+      await db.maintenanceLog.delete({
+        where: { id: maintenanceId },
+      });
+
+      return json({ success: "Maintenance task deleted successfully" });
+    }
+
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Maintenance action error:", error);
     return json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }
 
 export default function Maintenance() {
-  const { user, maintenanceLogs, rooms } = useLoaderData<typeof loader>();
+  const { user, maintenanceLogs } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const [opened, { open, close }] = useDisclosure(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [priorityFilter, setPriorityFilter] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    logId: string;
+    canDelete: boolean;
+  }>({ isOpen: false, logId: "", canDelete: false });
+
+  // Close delete modal on successful action
+  useEffect(() => {
+    if (actionData && 'success' in actionData) {
+      setDeleteConfirm({ isOpen: false, logId: "", canDelete: false });
+    }
+  }, [actionData]);
+
+  // Filter logic
+  const filteredLogs = maintenanceLogs.filter((log) => {
+    const matchesSearch = 
+      searchTerm === "" ||
+      log.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.room.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (log.asset?.name && log.asset.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (log.reportedBy && log.reportedBy.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesStatus = statusFilter === "" || log.status === statusFilter;
+    const matchesPriority = priorityFilter === "" || log.priority === priorityFilter;
+
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
 
   const getStatusColor = (status: MaintenanceLog["status"]) => {
     switch (status) {
       case "PENDING":
         return "yellow";
-      case "IN_PROGRESS":
+        case "IN_PROGRESS":
         return "blue";
       case "COMPLETED":
         return "green";
@@ -170,23 +198,75 @@ export default function Maintenance() {
     }
   };
 
-  const getTypeIcon = (type: MaintenanceLog["type"]) => {
-    return <IconTool size={16} />;
-  };
+  if(location.pathname !== "/dashboard/maintenance") return <Outlet />
 
   return (
     <DashboardLayout user={user}>
       <Stack>
         <Group justify="space-between">
           <Title order={2}>Maintenance Management</Title>
-          {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
-            <Button leftSection={<IconPlus size={16} />} onClick={open}>
-              New Maintenance Task
+          <Group>
+            <Button 
+              variant="light"
+              leftSection={<IconFilter size={16} />} 
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              {showFilters ? "Hide Filters" : "Show Filters"}
             </Button>
-          )}
+            {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
+              <Button 
+                leftSection={<IconPlus size={16} />} 
+                onClick={() => navigate("/dashboard/maintenance/new")}
+              >
+                New Maintenance Task
+              </Button>
+            )}
+          </Group>
         </Group>
 
-        {actionData?.error && (
+        {showFilters && (
+          <Paper p="md" withBorder>
+            <Stack gap="md">
+              <Group grow>
+                <TextInput
+                  placeholder="Search by description, room, asset, or reporter..."
+                  leftSection={<IconSearch size={16} />}
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.currentTarget.value)}
+                />
+                <Select
+                  placeholder="Filter by status"
+                  data={[
+                    { value: "", label: "All Statuses" },
+                    { value: "PENDING", label: "Pending" },
+                    { value: "IN_PROGRESS", label: "In Progress" },
+                    { value: "COMPLETED", label: "Completed" },
+                    { value: "CANCELLED", label: "Cancelled" },
+                  ]}
+                  value={statusFilter}
+                  onChange={(value) => setStatusFilter(value || "")}
+                />
+                <Select
+                  placeholder="Filter by priority"
+                  data={[
+                    { value: "", label: "All Priorities" },
+                    { value: "LOW", label: "Low" },
+                    { value: "MEDIUM", label: "Medium" },
+                    { value: "HIGH", label: "High" },
+                    { value: "CRITICAL", label: "Critical" },
+                  ]}
+                  value={priorityFilter}
+                  onChange={(value) => setPriorityFilter(value || "")}
+                />
+              </Group>
+              <Text size="sm" c="dimmed">
+                Showing {filteredLogs.length} of {maintenanceLogs.length} maintenance tasks
+              </Text>
+            </Stack>
+          </Paper>
+        )}
+
+        {actionData && 'error' in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Error"
@@ -196,7 +276,7 @@ export default function Maintenance() {
           </Alert>
         )}
 
-        {actionData?.success && (
+        {actionData && 'success' in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Success"
@@ -212,6 +292,7 @@ export default function Maintenance() {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Room</Table.Th>
+                  <Table.Th>Asset</Table.Th>
                   <Table.Th>Type</Table.Th>
                   <Table.Th>Description</Table.Th>
                 <Table.Th>Priority</Table.Th>
@@ -222,7 +303,16 @@ export default function Maintenance() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {maintenanceLogs.map((log) => (
+              {filteredLogs.length === 0 ? (
+                <Table.Tr>
+                  <Table.Td colSpan={9} style={{ textAlign: "center", padding: "2rem" }}>
+                    {searchTerm || statusFilter || priorityFilter 
+                      ? "No maintenance tasks match your filters"
+                      : "No maintenance tasks found"}
+                  </Table.Td>
+                </Table.Tr>
+              ) : (
+                filteredLogs.map((log) => (
                 <Table.Tr key={log.id}>
                   <Table.Td>
                     <div>
@@ -233,8 +323,32 @@ export default function Maintenance() {
                     </div>
                   </Table.Td>
                   <Table.Td>
+                    {log.asset ? (
+                      <div>
+                        <Text size="sm" fw={500}>
+                          {log.asset.name}
+                        </Text>
+                        <Badge size="xs" variant="light" color={
+                          log.asset.condition === "EXCELLENT" ? "green" :
+                          log.asset.condition === "GOOD" ? "blue" :
+                          log.asset.condition === "FAIR" ? "yellow" :
+                          log.asset.condition === "POOR" ? "orange" :
+                          log.asset.condition === "DAMAGED" ? "red" :
+                          log.asset.condition === "BROKEN" ? "red" :
+                          log.asset.condition === "MISSING" ? "gray" : "gray"
+                        }>
+                          {log.asset.category.replace("_", " ")}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <Text size="sm" c="dimmed" fs="italic">
+                        General Room
+                      </Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
                     <Group gap="xs">
-                      {getTypeIcon(log.type)}
+                      <IconTool size={16} />
                       <Text size="sm">
                         {log.type.replace("_", " ")}
                       </Text>
@@ -272,127 +386,136 @@ export default function Maintenance() {
                   </Table.Td>
                   <Table.Td>
                     {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
-                      <Form method="post" style={{ display: "inline" }}>
-                        <input type="hidden" name="intent" value="update-status" />
-                        <input type="hidden" name="maintenanceId" value={log.id} />
-                        <Select
-                          name="status"
-                          size="xs"
-                          data={[
-                            { value: "PENDING", label: "Pending" },
-                            { value: "IN_PROGRESS", label: "In Progress" },
-                            { value: "COMPLETED", label: "Completed" },
-                            { value: "CANCELLED", label: "Cancelled" },
-                          ]}
-                          defaultValue={log.status}
-                          onChange={(value) => {
-                            if (value) {
+                      <Menu shadow="md" width={200}>
+                        <Menu.Target>
+                          <ActionIcon variant="light" color="gray">
+                            <IconDots size={16} />
+                          </ActionIcon>
+                        </Menu.Target>
+
+                        <Menu.Dropdown>
+                          <Menu.Label>Status</Menu.Label>
+                          <Menu.Item
+                            onClick={() => {
                               const form = new FormData();
                               form.append("intent", "update-status");
                               form.append("maintenanceId", log.id);
-                              form.append("status", value);
+                              form.append("status", "PENDING");
                               fetch("/dashboard/maintenance", {
                                 method: "POST",
                                 body: form,
                               }).then(() => window.location.reload());
-                            }
-                          }}
-                        />
-                      </Form>
+                            }}
+                            disabled={log.status === "PENDING"}
+                          >
+                            Mark as Pending
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() => {
+                              const form = new FormData();
+                              form.append("intent", "update-status");
+                              form.append("maintenanceId", log.id);
+                              form.append("status", "IN_PROGRESS");
+                              fetch("/dashboard/maintenance", {
+                                method: "POST",
+                                body: form,
+                              }).then(() => window.location.reload());
+                            }}
+                            disabled={log.status === "IN_PROGRESS"}
+                          >
+                            Mark as In Progress
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() => {
+                              const form = new FormData();
+                              form.append("intent", "update-status");
+                              form.append("maintenanceId", log.id);
+                              form.append("status", "COMPLETED");
+                              fetch("/dashboard/maintenance", {
+                                method: "POST",
+                                body: form,
+                              }).then(() => window.location.reload());
+                            }}
+                            disabled={log.status === "COMPLETED"}
+                          >
+                            Mark as Completed
+                          </Menu.Item>
+                          <Menu.Item
+                            onClick={() => {
+                              const form = new FormData();
+                              form.append("intent", "update-status");
+                              form.append("maintenanceId", log.id);
+                              form.append("status", "CANCELLED");
+                              fetch("/dashboard/maintenance", {
+                                method: "POST",
+                                body: form,
+                              }).then(() => window.location.reload());
+                            }}
+                            disabled={log.status === "CANCELLED"}
+                          >
+                            Mark as Cancelled
+                          </Menu.Item>
+
+                          <Menu.Divider />
+
+                          <Menu.Label>Actions</Menu.Label>
+                          <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash size={14} />}
+                            onClick={() => {
+                              setDeleteConfirm({ 
+                                isOpen: true, 
+                                logId: log.id, 
+                                canDelete: log.status === "PENDING" || log.status === "CANCELLED" 
+                              });
+                            }}
+                          >
+                            Delete Task
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
                     )}
                   </Table.Td>
                 </Table.Tr>
-              ))}
+              )))}
             </Table.Tbody>
           </Table>
           </Table.ScrollContainer>
         </Card>
 
-        <Modal opened={opened} onClose={close} title="Create Maintenance Task" size="lg">
-          <Form method="post">
-            <input type="hidden" name="intent" value="create" />
-            <Stack>
-              <Select
-                label="Room"
-                placeholder="Select room"
-                name="roomId"
-                data={rooms.map(room => ({
-                  value: room.id,
-                  label: `Room ${room.number} (Block ${room.block}) - ${room.type.replace("_", " ")}`
-                }))}
-                required
-                searchable
-              />
-
-              <Select
-                label="Maintenance Type"
-                placeholder="Select type"
-                name="type"
-                data={[
-                  { value: "CLEANING", label: "Cleaning" },
-                  { value: "REPAIR", label: "Repair" },
-                  { value: "INSPECTION", label: "Inspection" },
-                  { value: "UPGRADE", label: "Upgrade" },
-                  { value: "PREVENTIVE", label: "Preventive" },
-                ]}
-                required
-              />
-
-              <Textarea
-                label="Description"
-                placeholder="Describe the maintenance task..."
-                name="description"
-                required
-                rows={3}
-              />
-
-              <Select
-                label="Priority"
-                placeholder="Select priority"
-                name="priority"
-                data={[
-                  { value: "LOW", label: "Low" },
-                  { value: "MEDIUM", label: "Medium" },
-                  { value: "HIGH", label: "High" },
-                  { value: "CRITICAL", label: "Critical" },
-                ]}
-                required
-              />
-
-              <Group grow>
-                <Textarea
-                  label="Reported By"
-                  placeholder="Staff member name"
-                  name="reportedBy"
-                  rows={1}
-                />
-                <Textarea
-                  label="Assigned To"
-                  placeholder="Maintenance staff"
-                  name="assignedTo"
-                  rows={1}
-                />
-              </Group>
-
-              <NumberInput
-                label="Estimated Cost"
-                placeholder="100"
-                name="cost"
-                min={0}
-                prefix="₵"
-                decimalScale={2}
-              />
-
-              <Group justify="flex-end">
-                <Button variant="outline" onClick={close}>
-                  Cancel
-                </Button>
-                <Button type="submit" onClick={close}>
-                  Create Task
-                </Button>
-              </Group>
-            </Stack>
-          </Form>
+        <Modal
+          opened={deleteConfirm.isOpen}
+          onClose={() => setDeleteConfirm({ isOpen: false, logId: "", canDelete: false })}
+          title="Delete Maintenance Task"
+          centered
+        >
+          <Stack gap="md">
+            <Text>
+              {deleteConfirm.canDelete
+                ? "Are you sure you want to delete this maintenance task? This action cannot be undone."
+                : "This maintenance task cannot be deleted because it's currently in progress or completed. Only pending tasks can be deleted."}
+            </Text>
+            <Group justify="flex-end">
+              <Button
+                variant="light"
+                onClick={() => setDeleteConfirm({ isOpen: false, logId: "", canDelete: false })}
+              >
+                Cancel
+              </Button>
+              {deleteConfirm.canDelete && (
+                <Form method="post" style={{ display: "inline" }}>
+                  <input type="hidden" name="intent" value="delete" />
+                  <input type="hidden" name="maintenanceId" value={deleteConfirm.logId} />
+                  <Button
+                    type="submit"
+                    color="red"
+                  >
+                    Delete
+                  </Button>
+                </Form>
+              )}
+            </Group>
+          </Stack>
         </Modal>
       </Stack>
     </DashboardLayout>

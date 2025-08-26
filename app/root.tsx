@@ -16,6 +16,7 @@ import "@mantine/notifications/styles.css";
 import "@mantine/dates/styles.css";
 import "@mantine/dropzone/styles.css";
 import "@mantine/spotlight/styles.css";
+import "@mantine/charts/styles.css";
 import { theme } from "./utils/theme";
 
 export const links: LinksFunction = () => [

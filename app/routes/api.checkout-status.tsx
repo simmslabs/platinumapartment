@@ -2,13 +2,10 @@ import { json } from "@remix-run/node";
 import { db } from "~/utils/db.server";
 
 export async function loader() {
-  console.log('API: checkout-status endpoint called');
   try {
     const now = new Date();
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     const endOfToday = new Date(new Date().setHours(23, 59, 59, 999));
-
-    console.log('API: Querying database for checkout counts...');
 
     // Count overdue checkouts (should have checked out but haven't)
     const overdueCount = await db.booking.count({
@@ -48,8 +45,6 @@ export async function loader() {
       todayCheckOuts,
       totalCritical: overdueCount + upcomingCount,
     };
-
-    console.log('API: Checkout status result:', result);
 
     return json(result);
   } catch (error) {

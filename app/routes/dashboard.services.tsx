@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useSubmit } from "@remix-run/react";
 import { useState } from "react";
 import {
   Title,
@@ -60,6 +60,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 
+  console.log("Services action triggered with intent:", intent); // Debug log
+
   try {
     if (intent === "create") {
       const name = formData.get("name") as string;
@@ -113,6 +115,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "delete") {
       const id = formData.get("id") as string;
+      console.log("Delete intent triggered for service ID:", id); // Debug log
 
       if (!id) {
         return json({ error: "Service ID is required" }, { status: 400 });
@@ -149,8 +152,11 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function Services() {
   const { user, services } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const submit = useSubmit();
   const [opened, { open, close }] = useDisclosure(false);
+  const [deleteConfirm, { open: openDeleteConfirm, close: closeDeleteConfirm }] = useDisclosure(false);
   const [editingService, setEditingService] = useState<any>(null);
+  const [deletingServiceId, setDeletingServiceId] = useState<string>("");
 
   const getCategoryColor = (category: ServiceCategory) => {
     switch (category) {
@@ -200,15 +206,22 @@ export default function Services() {
   };
 
   const handleDelete = (serviceId: string) => {
-    if (confirm("Are you sure you want to delete this service? This action cannot be undone.")) {
-      const form = new FormData();
-      form.append("intent", "delete");
-      form.append("id", serviceId);
-      fetch("/dashboard/services", {
-        method: "POST",
-        body: form,
-      }).then(() => window.location.reload());
-    }
+    console.log("handleDelete triggered for service ID:", serviceId); // Debug log
+    setDeletingServiceId(serviceId);
+    openDeleteConfirm();
+  };
+
+  const confirmDelete = () => {
+    console.log("User confirmed deletion, submitting..."); // Debug log
+    submit(
+      {
+        intent: "delete",
+        id: deletingServiceId,
+      },
+      { method: "post" }
+    );
+    closeDeleteConfirm();
+    setDeletingServiceId("");
   };
 
   const handleModalClose = () => {
@@ -410,6 +423,31 @@ export default function Services() {
               </Group>
             </Stack>
           </Form>
+        </Modal>
+
+        <Modal
+          opened={deleteConfirm}
+          onClose={closeDeleteConfirm}
+          title="Delete Service"
+          centered
+          size="md"
+        >
+          <Stack gap="md">
+            <Text>
+              Are you sure you want to delete this service? This action cannot be undone.
+            </Text>
+            <Text size="sm" c="dimmed">
+              Note: Services with existing bookings cannot be deleted.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="outline" onClick={closeDeleteConfirm}>
+                Cancel
+              </Button>
+              <Button color="red" onClick={confirmDelete}>
+                Delete Service
+              </Button>
+            </Group>
+          </Stack>
         </Modal>
       </Stack>
     </DashboardLayout>
