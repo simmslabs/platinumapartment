@@ -10,13 +10,27 @@
       }
     },
     "routeIdToServerBundleId": {
+      "routes/dashboard.security-deposits.receive": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.rooms.$roomId.assets.new": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.guests.$guestId.edit": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.bookings.$bookingId": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.cron.checkout-reminders": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.security-deposits": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.payment-accounts": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.blocks.$blockId": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.guests.$guestId": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.maintenance.new": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.admin.storage-stats": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.rooms.$roomId": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.cron.notifications": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.bookings.new": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.payments.new": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.maintenance": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.guests.new": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.monitoring": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.checkout-status": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.analytics": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard.rooms.new": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.reports.export": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.bookings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.payments": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
@@ -24,11 +38,14 @@
       "routes/dashboard.settings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.guests.import": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.reports": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.debug.images": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.guests": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard._index": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.rooms": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard.users": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.debug.r2": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.settings": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/api.images": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/api.test": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/register": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/health": "nodejs-eyJydW50aW1lIjoibm9kZWpzIn0",
@@ -42,6 +59,51 @@
         "id": "root",
         "file": "app/root.tsx",
         "config": {}
+      },
+      "routes/dashboard.security-deposits.receive": {
+        "file": "app/routes/dashboard.security-deposits.receive.tsx",
+        "id": "routes/dashboard.security-deposits.receive",
+        "path": "receive",
+        "parentId": "routes/dashboard.security-deposits",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.rooms.$roomId.assets.new": {
+        "file": "app/routes/dashboard.rooms.$roomId.assets.new.tsx",
+        "id": "routes/dashboard.rooms.$roomId.assets.new",
+        "path": "assets/new",
+        "parentId": "routes/dashboard.rooms.$roomId",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.guests.$guestId.edit": {
+        "file": "app/routes/dashboard.guests.$guestId.edit.tsx",
+        "id": "routes/dashboard.guests.$guestId.edit",
+        "path": "edit",
+        "parentId": "routes/dashboard.guests.$guestId",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.bookings.$bookingId": {
+        "file": "app/routes/dashboard.bookings.$bookingId.tsx",
+        "id": "routes/dashboard.bookings.$bookingId",
+        "path": ":bookingId",
+        "parentId": "routes/dashboard.bookings",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.cron.checkout-reminders": {
+        "file": "app/routes/api.cron.checkout-reminders.tsx",
+        "id": "routes/api.cron.checkout-reminders",
+        "path": "api/cron/checkout-reminders",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
       },
       "routes/dashboard.security-deposits": {
         "file": "app/routes/dashboard.security-deposits.tsx",
@@ -61,11 +123,47 @@
           "runtime": "nodejs"
         }
       },
+      "routes/dashboard.blocks.$blockId": {
+        "file": "app/routes/dashboard.blocks.$blockId.tsx",
+        "id": "routes/dashboard.blocks.$blockId",
+        "path": "dashboard/blocks/:blockId",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
       "routes/dashboard.guests.$guestId": {
         "file": "app/routes/dashboard.guests.$guestId.tsx",
         "id": "routes/dashboard.guests.$guestId",
         "path": ":guestId",
         "parentId": "routes/dashboard.guests",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.maintenance.new": {
+        "file": "app/routes/dashboard.maintenance.new.tsx",
+        "id": "routes/dashboard.maintenance.new",
+        "path": "new",
+        "parentId": "routes/dashboard.maintenance",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.admin.storage-stats": {
+        "file": "app/routes/api.admin.storage-stats.tsx",
+        "id": "routes/api.admin.storage-stats",
+        "path": "api/admin/storage-stats",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.rooms.$roomId": {
+        "file": "app/routes/dashboard.rooms.$roomId.tsx",
+        "id": "routes/dashboard.rooms.$roomId",
+        "path": ":roomId",
+        "parentId": "routes/dashboard.rooms",
         "config": {
           "runtime": "nodejs"
         }
@@ -79,11 +177,38 @@
           "runtime": "nodejs"
         }
       },
+      "routes/dashboard.bookings.new": {
+        "file": "app/routes/dashboard.bookings.new.tsx",
+        "id": "routes/dashboard.bookings.new",
+        "path": "new",
+        "parentId": "routes/dashboard.bookings",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.payments.new": {
+        "file": "app/routes/dashboard.payments.new.tsx",
+        "id": "routes/dashboard.payments.new",
+        "path": "new",
+        "parentId": "routes/dashboard.payments",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
       "routes/dashboard.maintenance": {
         "file": "app/routes/dashboard.maintenance.tsx",
         "id": "routes/dashboard.maintenance",
         "path": "dashboard/maintenance",
         "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.guests.new": {
+        "file": "app/routes/dashboard.guests.new.tsx",
+        "id": "routes/dashboard.guests.new",
+        "path": "new",
+        "parentId": "routes/dashboard.guests",
         "config": {
           "runtime": "nodejs"
         }
@@ -97,11 +222,29 @@
           "runtime": "nodejs"
         }
       },
+      "routes/api.checkout-status": {
+        "file": "app/routes/api.checkout-status.tsx",
+        "id": "routes/api.checkout-status",
+        "path": "api/checkout-status",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
       "routes/dashboard.analytics": {
         "file": "app/routes/dashboard.analytics.tsx",
         "id": "routes/dashboard.analytics",
         "path": "dashboard/analytics",
         "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard.rooms.new": {
+        "file": "app/routes/dashboard.rooms.new.tsx",
+        "id": "routes/dashboard.rooms.new",
+        "path": "new",
+        "parentId": "routes/dashboard.rooms",
         "config": {
           "runtime": "nodejs"
         }
@@ -169,6 +312,15 @@
           "runtime": "nodejs"
         }
       },
+      "routes/api.debug.images": {
+        "file": "app/routes/api.debug.images.tsx",
+        "id": "routes/api.debug.images",
+        "path": "api/debug/images",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
       "routes/dashboard.guests": {
         "file": "app/routes/dashboard.guests.tsx",
         "id": "routes/dashboard.guests",
@@ -206,10 +358,28 @@
           "runtime": "nodejs"
         }
       },
+      "routes/api.debug.r2": {
+        "file": "app/routes/api.debug.r2.tsx",
+        "id": "routes/api.debug.r2",
+        "path": "api/debug/r2",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
       "routes/api.settings": {
         "file": "app/routes/api.settings.tsx",
         "id": "routes/api.settings",
         "path": "api/settings",
+        "parentId": "root",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/api.images": {
+        "file": "app/routes/api.images.tsx",
+        "id": "routes/api.images",
+        "path": "api/images",
         "parentId": "root",
         "config": {
           "runtime": "nodejs"
@@ -272,9 +442,9 @@
     }
   },
   "remixConfig": {
-    "appDirectory": "D:\\Workspace\\RemixJS\\apartment\\app",
+    "appDirectory": "C:\\Users\\simmslabs\\Desktop\\Workspace\\DevProjects\\RemixJS\\platinumapartment\\app",
     "basename": "/",
-    "buildDirectory": "D:\\Workspace\\RemixJS\\apartment\\build",
+    "buildDirectory": "C:\\Users\\simmslabs\\Desktop\\Workspace\\DevProjects\\RemixJS\\platinumapartment\\build",
     "future": {
       "v3_fetcherPersist": true,
       "v3_relativeSplatPath": true,
@@ -292,6 +462,36 @@
         "id": "root",
         "file": "root.tsx"
       },
+      "routes/dashboard.security-deposits.receive": {
+        "file": "routes/dashboard.security-deposits.receive.tsx",
+        "id": "routes/dashboard.security-deposits.receive",
+        "path": "receive",
+        "parentId": "routes/dashboard.security-deposits"
+      },
+      "routes/dashboard.rooms.$roomId.assets.new": {
+        "file": "routes/dashboard.rooms.$roomId.assets.new.tsx",
+        "id": "routes/dashboard.rooms.$roomId.assets.new",
+        "path": "assets/new",
+        "parentId": "routes/dashboard.rooms.$roomId"
+      },
+      "routes/dashboard.guests.$guestId.edit": {
+        "file": "routes/dashboard.guests.$guestId.edit.tsx",
+        "id": "routes/dashboard.guests.$guestId.edit",
+        "path": "edit",
+        "parentId": "routes/dashboard.guests.$guestId"
+      },
+      "routes/dashboard.bookings.$bookingId": {
+        "file": "routes/dashboard.bookings.$bookingId.tsx",
+        "id": "routes/dashboard.bookings.$bookingId",
+        "path": ":bookingId",
+        "parentId": "routes/dashboard.bookings"
+      },
+      "routes/api.cron.checkout-reminders": {
+        "file": "routes/api.cron.checkout-reminders.tsx",
+        "id": "routes/api.cron.checkout-reminders",
+        "path": "api/cron/checkout-reminders",
+        "parentId": "root"
+      },
       "routes/dashboard.security-deposits": {
         "file": "routes/dashboard.security-deposits.tsx",
         "id": "routes/dashboard.security-deposits",
@@ -304,11 +504,35 @@
         "path": "dashboard/payment-accounts",
         "parentId": "root"
       },
+      "routes/dashboard.blocks.$blockId": {
+        "file": "routes/dashboard.blocks.$blockId.tsx",
+        "id": "routes/dashboard.blocks.$blockId",
+        "path": "dashboard/blocks/:blockId",
+        "parentId": "root"
+      },
       "routes/dashboard.guests.$guestId": {
         "file": "routes/dashboard.guests.$guestId.tsx",
         "id": "routes/dashboard.guests.$guestId",
         "path": ":guestId",
         "parentId": "routes/dashboard.guests"
+      },
+      "routes/dashboard.maintenance.new": {
+        "file": "routes/dashboard.maintenance.new.tsx",
+        "id": "routes/dashboard.maintenance.new",
+        "path": "new",
+        "parentId": "routes/dashboard.maintenance"
+      },
+      "routes/api.admin.storage-stats": {
+        "file": "routes/api.admin.storage-stats.tsx",
+        "id": "routes/api.admin.storage-stats",
+        "path": "api/admin/storage-stats",
+        "parentId": "root"
+      },
+      "routes/dashboard.rooms.$roomId": {
+        "file": "routes/dashboard.rooms.$roomId.tsx",
+        "id": "routes/dashboard.rooms.$roomId",
+        "path": ":roomId",
+        "parentId": "routes/dashboard.rooms"
       },
       "routes/api.cron.notifications": {
         "file": "routes/api.cron.notifications.tsx",
@@ -316,11 +540,29 @@
         "path": "api/cron/notifications",
         "parentId": "root"
       },
+      "routes/dashboard.bookings.new": {
+        "file": "routes/dashboard.bookings.new.tsx",
+        "id": "routes/dashboard.bookings.new",
+        "path": "new",
+        "parentId": "routes/dashboard.bookings"
+      },
+      "routes/dashboard.payments.new": {
+        "file": "routes/dashboard.payments.new.tsx",
+        "id": "routes/dashboard.payments.new",
+        "path": "new",
+        "parentId": "routes/dashboard.payments"
+      },
       "routes/dashboard.maintenance": {
         "file": "routes/dashboard.maintenance.tsx",
         "id": "routes/dashboard.maintenance",
         "path": "dashboard/maintenance",
         "parentId": "root"
+      },
+      "routes/dashboard.guests.new": {
+        "file": "routes/dashboard.guests.new.tsx",
+        "id": "routes/dashboard.guests.new",
+        "path": "new",
+        "parentId": "routes/dashboard.guests"
       },
       "routes/dashboard.monitoring": {
         "file": "routes/dashboard.monitoring.tsx",
@@ -328,11 +570,23 @@
         "path": "dashboard/monitoring",
         "parentId": "root"
       },
+      "routes/api.checkout-status": {
+        "file": "routes/api.checkout-status.tsx",
+        "id": "routes/api.checkout-status",
+        "path": "api/checkout-status",
+        "parentId": "root"
+      },
       "routes/dashboard.analytics": {
         "file": "routes/dashboard.analytics.tsx",
         "id": "routes/dashboard.analytics",
         "path": "dashboard/analytics",
         "parentId": "root"
+      },
+      "routes/dashboard.rooms.new": {
+        "file": "routes/dashboard.rooms.new.tsx",
+        "id": "routes/dashboard.rooms.new",
+        "path": "new",
+        "parentId": "routes/dashboard.rooms"
       },
       "routes/api.reports.export": {
         "file": "routes/api.reports.export.tsx",
@@ -376,6 +630,12 @@
         "path": "dashboard/reports",
         "parentId": "root"
       },
+      "routes/api.debug.images": {
+        "file": "routes/api.debug.images.tsx",
+        "id": "routes/api.debug.images",
+        "path": "api/debug/images",
+        "parentId": "root"
+      },
       "routes/dashboard.guests": {
         "file": "routes/dashboard.guests.tsx",
         "id": "routes/dashboard.guests",
@@ -401,10 +661,22 @@
         "path": "dashboard/users",
         "parentId": "root"
       },
+      "routes/api.debug.r2": {
+        "file": "routes/api.debug.r2.tsx",
+        "id": "routes/api.debug.r2",
+        "path": "api/debug/r2",
+        "parentId": "root"
+      },
       "routes/api.settings": {
         "file": "routes/api.settings.tsx",
         "id": "routes/api.settings",
         "path": "api/settings",
+        "parentId": "root"
+      },
+      "routes/api.images": {
+        "file": "routes/api.images.tsx",
+        "id": "routes/api.images",
+        "path": "api/images",
         "parentId": "root"
       },
       "routes/api.test": {
