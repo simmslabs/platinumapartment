@@ -76,7 +76,7 @@ model Block {
 model Room {
   id            String      @id @default(cuid())
   number        String     
-  type          RoomType
+  typeId        String     // Foreign key to RoomType
   status        RoomStatus @default(AVAILABLE)
   blockId       String?    // Make optional for migration, then required later
   block         String     @default("A") // Keep for backward compatibility during migration
@@ -92,6 +92,7 @@ model Room {
   updatedAt     DateTime   @updatedAt
 
   // Relations
+  type          RoomType         @relation(fields: [typeId], references: [id])
   blockRelation Block?           @relation(fields: [blockId], references: [id])
   bookings      Booking[]
   maintenance   MaintenanceLog[]
@@ -102,7 +103,7 @@ model Room {
   
   // Indexes for better PostgreSQL performance
   @@index([status])
-  @@index([type])
+  @@index([typeId])
   @@index([blockId])
   @@index([floor])
   @@index([pricePerNight])
@@ -110,12 +111,22 @@ model Room {
   @@index([createdAt])
 }
 
-enum RoomType {
-  SINGLE
-  DOUBLE
-  SUITE
-  DELUXE
-  PRESIDENTIAL
+model RoomType {
+  id          String @id @default(cuid())
+  name        String @unique // e.g., "ONE_BEDROOM_STANDARD"
+  displayName String         // e.g., "1 Bedroom Standard"
+  description String?        // Optional detailed description
+  basePrice   Float?         // Optional suggested base price
+  maxCapacity Int?           // Maximum recommended capacity
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  rooms Room[]
+
+  @@index([name])
+  @@index([isActive])
 }
 
 enum RoomStatus {

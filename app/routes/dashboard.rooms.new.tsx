@@ -23,7 +23,7 @@ import { IconArrowLeft, IconDeviceFloppy, IconAlertCircle, IconPlus, IconTrash }
 import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { RoomType, PricingPeriod, AssetCategory, AssetCondition } from "@prisma/client";
+import type { PricingPeriod, AssetCategory, AssetCondition } from "@prisma/client";
 import { useState } from "react";
 
 export const meta: MetaFunction = () => {
@@ -42,7 +42,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { name: "asc" },
   });
 
-  return json({ user, blocks });
+  // Get all active room types
+  const roomTypes = await db.roomType.findMany({
+    where: { isActive: true },
+    orderBy: { displayName: "asc" },
+  });
+
+  return json({ user, blocks, roomTypes });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -50,7 +56,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   
   const number = formData.get("number") as string;
-  const type = formData.get("type") as RoomType;
+  const typeId = formData.get("type") as string; // This will be the room type ID
   const block = formData.get("block") as string;
   const floorStr = formData.get("floor") as string;
   const capacityStr = formData.get("capacity") as string;
@@ -59,7 +65,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const description = formData.get("description") as string;
 
   // Validate required fields
-  if (!number || !type || !block || !floorStr || !capacityStr || !pricePerNightStr) {
+  if (!number || !typeId || !block || !floorStr || !capacityStr || !pricePerNightStr) {
     return json({ error: "All required fields must be filled" }, { status: 400 });
   }
 
@@ -129,7 +135,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const newRoom = await tx.room.create({
         data: {
           number,
-          type,
+          typeId,
           blockId: blockRecord.id,
           block, // Keep for backward compatibility
           floor,
@@ -168,7 +174,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AddRoom() {
-  const { user, blocks } = useLoaderData<typeof loader>();
+  const { user, blocks, roomTypes } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
@@ -183,13 +189,11 @@ export default function AddRoom() {
     serialNumber: string;
   }>>([]);
 
-  const roomTypes = [
-    { value: "SINGLE", label: "Single" },
-    { value: "DOUBLE", label: "Double" },
-    { value: "SUITE", label: "Suite" },
-    { value: "DELUXE", label: "Deluxe" },
-    { value: "PRESIDENTIAL", label: "Presidential" },
-  ];
+  // Convert room types to select data format
+  const roomTypeSelectData = roomTypes.map(type => ({
+    value: type.id,
+    label: type.displayName,
+  }));
 
   const pricingPeriods = [
     { value: "NIGHT", label: "Per Night" },
@@ -301,7 +305,7 @@ export default function AddRoom() {
                   label="Room Type"
                   name="type"
                   placeholder="Select room type"
-                  data={roomTypes}
+                  data={roomTypeSelectData}
                   required
                 />
               </Group>

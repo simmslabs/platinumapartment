@@ -57,7 +57,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <body>
         <MantineProvider
           theme={theme}
-          defaultColorScheme="auto"
+          defaultColorScheme="light"
         >
           <ModalsProvider>
             <Notifications />

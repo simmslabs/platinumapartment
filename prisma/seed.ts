@@ -18,6 +18,7 @@ async function main() {
   await prisma.booking.deleteMany();
   await prisma.roomAsset.deleteMany(); // Delete room assets before rooms
   await prisma.room.deleteMany();
+  await prisma.roomType.deleteMany(); // Delete room types before blocks
   await prisma.block.deleteMany();
   await prisma.paymentMethodConfig.deleteMany();
   await prisma.paymentAccount.deleteMany();
@@ -121,6 +122,70 @@ async function main() {
         description: 'Annex Building Block C',
         floors: 2,
         location: 'Separate building behind the main structure',
+      },
+    }),
+  ]);
+
+  // Create room types
+  const roomTypes = await Promise.all([
+    prisma.roomType.create({
+      data: {
+        name: 'ONE_BEDROOM_STANDARD',
+        displayName: '1 Bedroom Standard',
+        description: 'Standard one-bedroom apartment with basic amenities',
+        basePrice: 150.0,
+        maxCapacity: 2,
+        isActive: true,
+      },
+    }),
+    prisma.roomType.create({
+      data: {
+        name: 'ONE_BEDROOM_SPECIAL',
+        displayName: '1 Bedroom Special',
+        description: 'Special one-bedroom apartment with enhanced features',
+        basePrice: 180.0,
+        maxCapacity: 2,
+        isActive: true,
+      },
+    }),
+    prisma.roomType.create({
+      data: {
+        name: 'ONE_BEDROOM_FURNISHED',
+        displayName: '1 Bedroom Furnished',
+        description: 'Fully furnished one-bedroom apartment',
+        basePrice: 220.0,
+        maxCapacity: 2,
+        isActive: true,
+      },
+    }),
+    prisma.roomType.create({
+      data: {
+        name: 'ONE_BEDROOM_UNFURNISHED',
+        displayName: '1 Bedroom Unfurnished',
+        description: 'Unfurnished one-bedroom apartment',
+        basePrice: 130.0,
+        maxCapacity: 2,
+        isActive: true,
+      },
+    }),
+    prisma.roomType.create({
+      data: {
+        name: 'TWO_BEDROOM_STANDARD',
+        displayName: '2 Bedroom Standard',
+        description: 'Standard two-bedroom apartment',
+        basePrice: 280.0,
+        maxCapacity: 4,
+        isActive: true,
+      },
+    }),
+    prisma.roomType.create({
+      data: {
+        name: 'TWO_BEDROOM_ENSUITE',
+        displayName: '2 Bedroom Ensuite',
+        description: 'Two-bedroom apartment with ensuite bathrooms',
+        basePrice: 350.0,
+        maxCapacity: 4,
+        isActive: true,
       },
     }),
   ]);
@@ -233,7 +298,7 @@ async function main() {
     prisma.room.create({
       data: {
         number: '101',
-        type: 'SINGLE',
+        typeId: roomTypes[0].id, // ONE_BEDROOM_STANDARD
         status: 'AVAILABLE',
         blockId: blocks[0].id, // Block A
         block: 'A',
@@ -247,7 +312,7 @@ async function main() {
     prisma.room.create({
       data: {
         number: '102',
-        type: 'DOUBLE',
+        typeId: roomTypes[1].id, // ONE_BEDROOM_SPECIAL
         status: 'AVAILABLE',
         blockId: blocks[0].id, // Block A
         block: 'A',
@@ -261,7 +326,7 @@ async function main() {
     prisma.room.create({
       data: {
         number: '103',
-        type: 'SUITE',
+        typeId: roomTypes[2].id, // ONE_BEDROOM_FURNISHED
         status: 'AVAILABLE',
         blockId: blocks[0].id, // Block A
         block: 'A',
@@ -275,7 +340,7 @@ async function main() {
     prisma.room.create({
       data: {
         number: '201',
-        type: 'DELUXE',
+        typeId: roomTypes[4].id, // TWO_BEDROOM_STANDARD
         status: 'AVAILABLE',
         blockId: blocks[1].id, // Block B
         block: 'B',
@@ -289,7 +354,7 @@ async function main() {
     prisma.room.create({
       data: {
         number: '202',
-        type: 'SINGLE',
+        typeId: roomTypes[3].id, // ONE_BEDROOM_UNFURNISHED
         status: 'MAINTENANCE',
         blockId: blocks[1].id, // Block B
         block: 'B',
@@ -316,7 +381,7 @@ async function main() {
           roomId: room.id,
           name: 'King Size Bed',
           category: 'FURNITURE',
-          quantity: room.type === 'SINGLE' ? 1 : room.type === 'DOUBLE' ? 1 : 2,
+          quantity: Math.ceil(room.capacity / 2), // Base bed count on room capacity
           condition: 'GOOD',
           description: 'Comfortable king size bed with premium mattress',
           purchaseDate: new Date('2023-01-15'),
@@ -452,7 +517,7 @@ async function main() {
           roomId: room.id,
           name: 'Mattress',
           category: 'BEDDING',
-          quantity: room.type === 'SINGLE' ? 1 : room.type === 'DOUBLE' ? 1 : 2,
+          quantity: Math.ceil(room.capacity / 2), // Base mattress count on room capacity
           condition: 'GOOD',
           description: 'Premium memory foam mattress',
           purchaseDate: new Date('2023-08-01'),
@@ -464,7 +529,7 @@ async function main() {
           roomId: room.id,
           name: 'Pillows',
           category: 'BEDDING',
-          quantity: (room.type === 'SINGLE' ? 1 : room.type === 'DOUBLE' ? 1 : 2) * 2,
+          quantity: room.capacity * 2, // 2 pillows per person capacity
           condition: 'GOOD',
           description: 'Premium down pillows',
           purchaseDate: new Date('2024-01-01'),
@@ -526,8 +591,8 @@ async function main() {
       })
     );
 
-    // Add kitchenette items for suites and deluxe rooms
-    if (room.type === 'SUITE' || room.type === 'DELUXE') {
+    // Add kitchenette items for larger rooms (capacity 4 or more)
+    if (room.capacity >= 4) {
       roomAssets.push(
         prisma.roomAsset.create({
           data: {

@@ -22,7 +22,7 @@ import { IconPlus, IconEdit, IconInfoCircle, IconFilter, IconSearch, IconTrash, 
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Room, AssetCondition, RoomType, PricingPeriod, RoomStatus } from "@prisma/client";
+import type { Room, AssetCondition, PricingPeriod, RoomStatus } from "@prisma/client";
 import { useState, useMemo, useEffect } from "react";
 
 export const meta: MetaFunction = () => {
@@ -38,6 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const rooms = await db.room.findMany({
     include: {
+      type: true, // Include room type relationship
       blockRelation: true,
       assets: {
         orderBy: [
@@ -49,11 +50,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { number: "asc" },
   });
 
+  // Get all active room types for filtering
+  const roomTypes = await db.roomType.findMany({
+    where: { isActive: true },
+    orderBy: { displayName: "asc" },
+  });
+
   const blocks = await db.block.findMany({
     orderBy: { name: "asc" },
   });
 
-  return json({ user, rooms, blocks });
+  return json({ user, rooms, blocks, roomTypes });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -64,7 +71,7 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     if (intent === "create") {
       const number = formData.get("number") as string;
-      const type = formData.get("type") as RoomType;
+      const typeId = formData.get("type") as string; // This will be the room type ID
       const block = formData.get("block") as string;
       const floorStr = formData.get("floor") as string;
       const capacityStr = formData.get("capacity") as string;
@@ -73,7 +80,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const description = formData.get("description") as string;
 
       // Validate required fields
-      if (!number || !type || !block || !floorStr || !capacityStr || !pricePerNightStr) {
+      if (!number || !typeId || !block || !floorStr || !capacityStr || !pricePerNightStr) {
         return json({ error: "All required fields must be filled" }, { status: 400 });
       }
 
@@ -125,7 +132,7 @@ export async function action({ request }: ActionFunctionArgs) {
       await db.room.create({
         data: {
           number,
-          type,
+          typeId,
           blockId: blockRecord.id,
           block, // Keep for backward compatibility
           floor,
@@ -237,7 +244,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Rooms() {
-  const { user, rooms } = useLoaderData<typeof loader>();
+  const { user, rooms, roomTypes } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
   const [blockModalOpened, { open: openBlockModal, close: closeBlockModal }] = useDisclosure(false);
@@ -314,7 +321,8 @@ export default function Rooms() {
         const query = searchQuery.toLowerCase();
         const matchesSearch = 
           room.number.toLowerCase().includes(query) ||
-          room.type.toLowerCase().includes(query) ||
+          room.type.displayName.toLowerCase().includes(query) ||
+          room.type.name.toLowerCase().includes(query) ||
           room.block.toLowerCase().includes(query) ||
           `${room.block}-${room.number}`.toLowerCase().includes(query) || // Allow searching by "Block-RoomNumber" format
           room.description?.toLowerCase().includes(query) ||
@@ -326,7 +334,7 @@ export default function Rooms() {
       if (statusFilter && room.status !== statusFilter) return false;
 
       // Type filter  
-      if (typeFilter && room.type !== typeFilter) return false;
+      if (typeFilter && room.typeId !== typeFilter) return false;
 
       // Block filter
       if (blockFilter && room.block !== blockFilter) return false;
@@ -579,13 +587,7 @@ export default function Rooms() {
             
             <Select
                 placeholder="All Types"
-                data={[
-                  { value: "SINGLE", label: "Single" },
-                  { value: "DOUBLE", label: "Double" },
-                  { value: "SUITE", label: "Suite" },
-                  { value: "DELUXE", label: "Deluxe" },
-                  { value: "PRESIDENTIAL", label: "Presidential" },
-                ]}
+                data={roomTypes.map(type => ({ value: type.id, label: type.displayName }))}
                 value={typeFilter}
                 onChange={setTypeFilter}
                 clearable
@@ -702,7 +704,7 @@ export default function Rooms() {
 
                         <Stack gap="xs">
                           <Text size="sm">
-                            <strong>Type:</strong> {room.type.replace("_", " ")}
+                            <strong>Type:</strong> {room.type.displayName}
                           </Text>
                           <Text size="sm">
                             <strong>Block:</strong> {room.blockRelation ? `${room.blockRelation.name} - ${room.blockRelation.description}` : room.block}

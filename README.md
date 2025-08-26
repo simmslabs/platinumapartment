@@ -11,7 +11,7 @@ A comprehensive apartment management system built with **Remix.js**, **Mantine U
 - **Role-based access control** for different features
 
 ### 🏠 Room Management
-- **Room inventory** with different types (Single, Double, Suite, Deluxe, Presidential)
+- **Room inventory** with different types (1 Bedroom Standard, 1 Bedroom Special, 1 Bedroom Furnished, 1 Bedroom Unfurnished, 2 Bedroom Standard, 2 Bedroom Ensuite)
 - **Real-time room status** (Available, Occupied, Maintenance, Out of Order)
 - **Room details** including capacity, price, floor, and amenities
 - **Status updates** for housekeeping and maintenance
