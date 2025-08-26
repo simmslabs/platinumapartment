@@ -9,7 +9,10 @@ installGlobals();
 export default defineConfig({
   plugins: [
     remix({
-      presets: [vercelPreset()],
+      // Only use Vercel preset in production or when explicitly configured
+      ...(process.env.NODE_ENV === "production" || process.env.VERCEL ? {
+        presets: [vercelPreset()]
+      } : {}),
       future: {
         v3_fetcherPersist: true,
         v3_relativeSplatPath: true,
