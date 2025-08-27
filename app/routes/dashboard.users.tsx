@@ -17,7 +17,6 @@ import {
   Select,
   Grid,
   PasswordInput,
-  Tabs,
   ThemeIcon,
   Pagination,
   Center,
@@ -27,7 +26,6 @@ import {
 import { format } from "date-fns";
 import { useDisclosure } from "@mantine/hooks";
 import { 
-  IconPlus, 
   IconEdit, 
   IconTrash, 
   IconSearch, 
@@ -35,9 +33,6 @@ import {
   IconUserPlus,
   IconEye,
   IconShield,
-  IconMail,
-  IconPhone,
-  IconCalendar,
   IconCheck,
   IconX,
   IconAlertTriangle,
@@ -47,7 +42,7 @@ import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { User, Booking, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -56,14 +51,8 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-type UserWithBookings = User & {
-  bookings: Booking[];
-  _count: {
-    bookings: number;
-  };
-};
-
-type SerializedUserWithBookings = Omit<UserWithBookings, 'createdAt' | 'updatedAt' | 'bookings'> & {
+// Type for serialized data from loader (dates become strings)
+type SerializedUser = Omit<User, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
   updatedAt: string;
   bookings: (Omit<Booking, 'createdAt' | 'updatedAt' | 'checkIn' | 'checkOut'> & {
@@ -72,6 +61,9 @@ type SerializedUserWithBookings = Omit<UserWithBookings, 'createdAt' | 'updatedA
     checkIn: string;
     checkOut: string;
   })[];
+  _count: {
+    bookings: number;
+  };
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -326,28 +318,28 @@ export default function UsersManagement() {
   const [resetPasswordOpened, { open: openResetPassword, close: closeResetPassword }] = useDisclosure(false);
   const [viewOpened, { open: openView, close: closeView }] = useDisclosure(false);
   
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<SerializedUser | null>(null);
   const [searchInput, setSearchInput] = useState(search);
 
   const isSubmitting = navigation.state === "submitting";
 
-  const handleEdit = (user: any) => {
-    setSelectedUser(user);
+  const handleEdit = (user: typeof users[0]) => {
+    setSelectedUser(user as SerializedUser);
     openEdit();
   };
 
-  const handleDelete = (user: any) => {
-    setSelectedUser(user);
+  const handleDelete = (user: typeof users[0]) => {
+    setSelectedUser(user as SerializedUser);
     openDelete();
   };
 
-  const handleResetPassword = (user: any) => {
-    setSelectedUser(user);
+  const handleResetPassword = (user: typeof users[0]) => {
+    setSelectedUser(user as SerializedUser);
     openResetPassword();
   };
 
-  const handleView = (user: any) => {
-    setSelectedUser(user);
+  const handleView = (user: typeof users[0]) => {
+    setSelectedUser(user as SerializedUser);
     openView();
   };
 
@@ -880,15 +872,15 @@ export default function UsersManagement() {
                       </Text>
                       {selectedUser.bookings.length > 0 ? (
                         <Stack gap="xs">
-                          {selectedUser.bookings.map((booking: any) => (
-                            <div key={booking.id} style={{ padding: "8px", border: "1px solid #e0e0e0", borderRadius: "4px" }}>
+                          {selectedUser.bookings.map((booking) => (
+                            <Card key={booking.id} p="xs" withBorder>
                               <Text size="sm" fw={500}>
                                 {format(new Date(booking.checkIn), "MMM dd")} - {format(new Date(booking.checkOut), "MMM dd, yyyy")}
                               </Text>
                               <Text size="xs" c="dimmed">
                                 Status: {booking.status} | Total: ₵{booking.totalAmount}
                               </Text>
-                            </div>
+                            </Card>
                           ))}
                         </Stack>
                       ) : (

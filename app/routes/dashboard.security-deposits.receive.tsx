@@ -70,7 +70,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: {
           id: true,
           number: true,
-          type: true,
+          type: {
+            select: {
+              displayName: true,
+              name: true,
+            },
+          },
           block: true,
         },
       },
@@ -134,7 +139,11 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: bookingId },
       include: {
         user: true,
-        room: true,
+        room: {
+          include: {
+            type: true,
+          },
+        },
         securityDeposit: true,
       },
     });
@@ -192,7 +201,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (booking.user.phone) {
         await mnotifyService.sendSMS({
           recipient: booking.user.phone,
-          message: `Security deposit received! GH₵${amount.toFixed(2)} for Booking ${booking.id.slice(-8)} at ${booking.room.type} ${booking.room.number}. Thank you!`,
+          message: `Security deposit received! GH₵${amount.toFixed(2)} for Booking ${booking.id.slice(-8)} at ${booking.room.type.displayName} ${booking.room.number}. Thank you!`,
         });
       }
 
@@ -200,7 +209,7 @@ export async function action({ request }: ActionFunctionArgs) {
       if (process.env.ADMIN_PHONE_NUMBER) {
         await mnotifyService.sendSMS({
           recipient: process.env.ADMIN_PHONE_NUMBER,
-          message: `Security Deposit Alert: GH₵${amount.toFixed(2)} received for Booking ${booking.id.slice(-8)} (${booking.user.firstName} ${booking.user.lastName}). Room: ${booking.room.type} ${booking.room.number}`,
+          message: `Security Deposit Alert: GH₵${amount.toFixed(2)} received for Booking ${booking.id.slice(-8)} (${booking.user.firstName} ${booking.user.lastName}). Room: ${booking.room.type.displayName} ${booking.room.number}`,
         });
       }
     } catch (notificationError) {
@@ -318,7 +327,7 @@ export default function ReceiveSecurityDeposit() {
                     </Grid.Col>
                     <Grid.Col span={6}>
                       <Text size="sm" c="dimmed">Room</Text>
-                      <Text fw={500}>{booking.room.type} {booking.room.number}</Text>
+                      <Text fw={500}>{booking.room.type?.displayName} {booking.room.number}</Text>
                     </Grid.Col>
                     <Grid.Col span={6}>
                       <Text size="sm" c="dimmed">Booking ID</Text>

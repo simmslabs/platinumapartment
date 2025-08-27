@@ -10,7 +10,6 @@ import {
   Group,
   Modal,
   Select,
-  NumberInput,
   Alert,
   Text,
   Card,
@@ -30,23 +29,13 @@ import { format } from "date-fns";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Payment, Booking, User, Room, PaymentAccount, Receipt, Transaction } from "@prisma/client";
+import type { Payment } from "@prisma/client";
 
 export const meta: MetaFunction = () => {
   return [
     { title: "Payments - Apartment Management" },
     { name: "description", content: "Manage apartment payments and transactions" },
   ];
-};
-
-type PaymentWithDetails = Payment & {
-  booking: Booking & {
-    user: Pick<User, "firstName" | "lastName" | "email">;
-    room: Pick<Room, "number">;
-  };
-  paymentAccount?: PaymentAccount | null;
-  receipt?: Receipt | null;
-  transactions: Transaction[];
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -60,18 +49,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const bookingId = url.searchParams.get("bookingId"); // Get bookingId from URL
 
   // Build where clause for filtering
-  const where: any = {};
+  const whereClause: {
+    status?: "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
+    method?: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "MOBILE_MONEY" | "BANK_TRANSFER" | "ONLINE";
+    OR?: Array<{
+      booking?: {
+        user?: {
+          OR?: Array<{
+            firstName?: { contains: string; mode: "insensitive" };
+            lastName?: { contains: string; mode: "insensitive" };
+            email?: { contains: string; mode: "insensitive" };
+          }>;
+        };
+      };
+      transactionId?: { contains: string; mode: "insensitive" };
+    }>;
+  } = {};
   
   if (status && status !== "all") {
-    where.status = status;
+    whereClause.status = status as "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
   }
   
   if (method && method !== "all") {
-    where.method = method;
+    whereClause.method = method as "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "MOBILE_MONEY" | "BANK_TRANSFER" | "ONLINE";
   }
 
   if (search) {
-    where.OR = [
+    whereClause.OR = [
       {
         booking: {
           user: {
@@ -90,7 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const payments = await db.payment.findMany({
-    where,
+    where: whereClause,
     include: {
       booking: {
         include: {
@@ -313,7 +317,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "update-status") {
       const paymentId = formData.get("paymentId") as string;
-      const status = formData.get("status") as any;
+      const status = formData.get("status") as "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
 
       // Get the payment to find the associated booking
       const payment = await db.payment.findUnique({
@@ -334,7 +338,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       // Update booking status based on payment status
-      let bookingStatus = "PENDING"; // Default for unpaid/failed payments
+      let bookingStatus: "PENDING" | "CONFIRMED" = "PENDING"; // Default for unpaid/failed payments
       if (status === "COMPLETED") {
         bookingStatus = "CONFIRMED";
       } else if (status === "FAILED" || status === "REFUNDED") {
@@ -350,7 +354,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Payment action error:", error);
     return json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
@@ -363,6 +367,31 @@ export default function Payments() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const location = useLocation();
+
+  // Type assertion to fix the TypeScript inference issue
+  const typedPayments = payments as unknown as Array<{
+    id: string;
+    status: Payment["status"];
+    method: Payment["method"];
+    amount: number;
+    transactionId: string | null;
+    paidAt: Date | null;
+    booking: {
+      user: {
+        firstName: string;
+        lastName: string;
+        email: string;
+      };
+      room: {
+        number: string;
+      };
+    };
+    paymentAccount?: {
+      accountName: string | null;
+      type: string;
+      provider: string;
+    } | null;
+  }>;
 
   const getStatusColor = (status: Payment["status"]) => {
     switch (status) {
@@ -397,19 +426,19 @@ export default function Payments() {
   };
 
   // Analytics calculations
-  const totalRevenue = payments
+  const totalRevenue = typedPayments
     .filter(p => p.status === "COMPLETED")
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const pendingAmount = payments
+  const pendingAmount = typedPayments
     .filter(p => p.status === "PENDING")
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const completedPayments = payments.filter(p => p.status === "COMPLETED").length;
-  const pendingPayments = payments.filter(p => p.status === "PENDING").length;
-  const failedPayments = payments.filter(p => p.status === "FAILED").length;
+  const completedPayments = typedPayments.filter(p => p.status === "COMPLETED").length;
+  const pendingPayments = typedPayments.filter(p => p.status === "PENDING").length;
+  const failedPayments = typedPayments.filter(p => p.status === "FAILED").length;
 
-  const paymentMethods = payments.reduce((acc, payment) => {
+  const paymentMethods = typedPayments.reduce((acc, payment) => {
     acc[payment.method] = (acc[payment.method] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -422,7 +451,7 @@ export default function Payments() {
     { method: "BANK_TRANSFER", count: paymentMethods.BANK_TRANSFER || 0, color: "orange" },
   ];
 
-  const totalPayments = payments.length;
+  const totalPayments = typedPayments.length;
   const completionRate = totalPayments > 0 ? (completedPayments / totalPayments) * 100 : 0;
 
   const handleFilter = (key: string, value: string) => {
@@ -716,7 +745,7 @@ export default function Payments() {
             />
             <Flex justify="flex-end" align="center" h="100%">
               <Text size="sm" c="dimmed">
-                {payments.length} payment{payments.length !== 1 ? 's' : ''} found
+                {typedPayments.length} payment{typedPayments.length !== 1 ? 's' : ''} found
               </Text>
             </Flex>
           </SimpleGrid>
@@ -739,7 +768,7 @@ export default function Payments() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {payments.map((payment) => (
+              {typedPayments.map((payment) => (
                 <Table.Tr key={payment.id}>
                   <Table.Td>
                     <div>
@@ -842,7 +871,7 @@ export default function Payments() {
           </Table>
           </Table.ScrollContainer>
 
-          {payments.length === 0 && (
+          {typedPayments.length === 0 && (
             <Stack align="center" py="xl">
               <IconInfoCircle size={48} color="gray" />
               <Text c="dimmed" ta="center">
@@ -890,7 +919,7 @@ export default function Payments() {
                 defaultValue={selectedBooking?.id}
                 data={allBookingsForDropdown.map(booking => ({
                   value: booking.id,
-                  label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number} (₵${booking.totalAmount})${booking.payment ? ' [PAID]' : ''}`
+                  label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number} (₵${booking.totalAmount})${'payment' in booking && booking.payment ? ' [PAID]' : ''}`
                 }))}
                 required
                 searchable

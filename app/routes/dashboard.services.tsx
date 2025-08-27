@@ -26,13 +26,24 @@ import { format } from "date-fns";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Service, ServiceCategory } from "@prisma/client";
+import type { ServiceCategory } from "@prisma/client";
 
 export const meta: MetaFunction = () => {
   return [
     { title: "Services - Apartment Management" },
     { name: "description", content: "Manage apartment services and amenities" },
   ];
+};
+
+type ServiceType = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  category: ServiceCategory;
+  available: boolean;
+  createdAt: string; // Serialized date from loader
+  updatedAt: string; // Serialized date from loader
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -143,7 +154,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Service action error:", error);
     return json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
@@ -155,7 +166,7 @@ export default function Services() {
   const submit = useSubmit();
   const [opened, { open, close }] = useDisclosure(false);
   const [deleteConfirm, { open: openDeleteConfirm, close: closeDeleteConfirm }] = useDisclosure(false);
-  const [editingService, setEditingService] = useState<any>(null);
+  const [editingService, setEditingService] = useState<ServiceType | null>(null);
   const [deletingServiceId, setDeletingServiceId] = useState<string>("");
 
   const getCategoryColor = (category: ServiceCategory) => {
@@ -200,8 +211,8 @@ export default function Services() {
     }
   };
 
-  const handleEdit = (service: any) => {
-    setEditingService(service);
+  const handleEdit = (service: typeof services[0]) => {
+    setEditingService(service as ServiceType);
     open();
   };
 
@@ -285,7 +296,7 @@ export default function Services() {
                       <div>
                         <Text fw={500}>{service.name}</Text>
                         <Text size="sm" c="dimmed" lineClamp={2}>
-                          {service.description}
+                          {service.description || "No description provided"}
                         </Text>
                       </div>
                     </Table.Td>

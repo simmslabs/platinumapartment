@@ -39,7 +39,10 @@ type BookingWithRelations = Booking & {
   };
   room: { 
     number: string; 
-    type: string; 
+    type: {
+      displayName: string;
+      name: string;
+    }; 
     block: string; 
     pricingPeriod: string; 
     pricePerNight: number; 
@@ -81,7 +84,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { firstName: true, lastName: true, email: true, phone: true },
       },
       room: {
-        select: { number: true, type: true, block: true, pricingPeriod: true, pricePerNight: true },
+        select: { 
+          number: true, 
+          block: true, 
+          pricingPeriod: true, 
+          pricePerNight: true,
+          type: {
+            select: {
+              displayName: true,
+              name: true
+            }
+          }
+        },
       },
       payment: {
         select: { 
@@ -109,7 +123,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const availableRooms = await db.room.findMany({
     where: { status: "AVAILABLE" },
-    select: { id: true, number: true, type: true, pricePerNight: true, pricingPeriod: true, block: true },
+    select: { 
+      id: true, 
+      number: true, 
+      pricePerNight: true, 
+      pricingPeriod: true, 
+      block: true,
+      type: {
+        select: {
+          displayName: true,
+          name: true
+        }
+      }
+    },
   });
 
   const guests = await db.user.findMany({
@@ -626,18 +652,21 @@ export default function Bookings() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const location = useLocation();
 
+  // Type for bookings from loader data
+  type LoaderBooking = typeof bookings[0];
+
   // Confirmation modal state
   const [confirmationOpened, { open: openConfirmation, close: closeConfirmation }] = useDisclosure(false);
   const [pendingAction, setPendingAction] = useState<{
     type: string;
     bookingId: string;
-    booking?: any;
+    booking?: LoaderBooking;
     newStatus?: string;
   } | null>(null);
   const [confirmationText, setConfirmationText] = useState("");
 
   // Handler functions for different actions
-  const handleStatusChange = (booking: any, newStatus: string) => {
+  const handleStatusChange = (booking: LoaderBooking, newStatus: string) => {
     setPendingAction({
       type: "status-change",
       bookingId: booking.id,
@@ -648,7 +677,7 @@ export default function Bookings() {
     openConfirmation();
   };
 
-  const handleDeleteBooking = (booking: any) => {
+  const handleDeleteBooking = (booking: LoaderBooking) => {
     setPendingAction({
       type: "delete",
       bookingId: booking.id,
@@ -658,7 +687,7 @@ export default function Bookings() {
     openConfirmation();
   };
 
-  const handleRestoreBooking = (booking: any) => {
+  const handleRestoreBooking = (booking: LoaderBooking) => {
     setPendingAction({
       type: "restore",
       bookingId: booking.id,
@@ -668,7 +697,7 @@ export default function Bookings() {
     openConfirmation();
   };
 
-  const handleHardDelete = (booking: any) => {
+  const handleHardDelete = (booking: LoaderBooking) => {
     setPendingAction({
       type: "hard-delete",
       bookingId: booking.id,
@@ -723,7 +752,7 @@ export default function Bookings() {
   const getConfirmationConfig = () => {
     if (!pendingAction) return null;
 
-    const { type, booking, newStatus } = pendingAction;
+    const { type, newStatus } = pendingAction;
 
     switch (type) {
       case "status-change": {
@@ -866,12 +895,13 @@ export default function Bookings() {
   // Filter bookings based on search query and status
   const filteredBookings = useMemo(() => {
     const filtered = bookings.filter((booking) => {
+      const roomWithType = booking.room as BookingWithRelations['room'];
       const matchesSearch = 
         booking.user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.user.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         booking.room.number.toString().includes(searchQuery.toLowerCase()) ||
-        booking.room.type.toLowerCase().includes(searchQuery.toLowerCase());
+        roomWithType.type?.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
 
@@ -1172,7 +1202,7 @@ export default function Bookings() {
                     <div>
                       <Text fw={500}>Room {booking.room.number}</Text>
                       <Text size="sm" c="dimmed">
-                        Block {booking.room.block} • {booking.room.type.replace("_", " ")}
+                        Block {booking.room.block} • {(booking.room as BookingWithRelations['room']).type?.displayName || 'Unknown Type'}
                       </Text>
                     </div>
                   </Table.Td>
@@ -1365,7 +1395,7 @@ export default function Bookings() {
                         {pendingAction.booking.user.firstName} {pendingAction.booking.user.lastName}
                       </Text>
                       <Text size="sm" c="dimmed">
-                        Room {pendingAction.booking.room.number} • {pendingAction.booking.room.type}
+                        Room {pendingAction.booking.room.number} • {pendingAction.booking.room.type.displayName}
                       </Text>
                       <Text size="sm" c="dimmed">
                         {format(new Date(pendingAction.booking.checkIn), "MMM dd, yyyy")} - {format(new Date(pendingAction.booking.checkOut), "MMM dd, yyyy")}

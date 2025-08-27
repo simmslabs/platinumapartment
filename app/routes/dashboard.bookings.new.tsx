@@ -22,7 +22,6 @@ import { format } from "date-fns";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import { emailService } from "~/utils/email.server";
 import { mnotifyService } from "~/utils/mnotify.server";
 import { useState, useEffect, useMemo } from "react";
 
@@ -115,6 +114,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
     include: {
       blockRelation: true,
+      type: true,
     },
     orderBy: { number: "asc" },
   });
@@ -361,9 +361,11 @@ export default function NewBooking() {
                 data={availableRooms.map(room => {
                   const periodDisplay = getPricingPeriodDisplay(room.pricingPeriod || 'NIGHT');
                   const dailyEquivalent = calculateDailyEquivalent(room.pricePerNight, room.pricingPeriod || 'NIGHT');
+                  const roomWithType = room as typeof room & { type: { displayName: string } };
+                  const roomTypeName = roomWithType.type?.displayName || 'Unknown Type';
                   return {
                     value: room.id,
-                    label: `Room ${room.number} (Block ${room.block}) - ${room.type.replace('_', ' ')} - ₵${room.pricePerNight}/${periodDisplay} (≈₵${dailyEquivalent.toFixed(2)}/day)`
+                    label: `Room ${room.number} (Block ${room.block}) - ${roomTypeName} - ₵${room.pricePerNight}/${periodDisplay} (≈₵${dailyEquivalent.toFixed(2)}/day)`
                   };
                 })}
                 required

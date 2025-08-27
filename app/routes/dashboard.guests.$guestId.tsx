@@ -70,6 +70,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           room: {
             include: {
               blockRelation: true,
+              type: true,
             },
           },
           payment: true,
@@ -133,7 +134,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Room type preferences
   const roomTypeStats = guest.bookings.reduce((acc, booking) => {
-    const roomType = booking.room.type;
+    const roomWithType = booking.room as typeof booking.room & { type: { displayName: string } };
+    const roomType = roomWithType.type?.displayName || 'Unknown';
     acc[roomType] = (acc[roomType] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -607,7 +609,7 @@ export default function GuestDetails() {
                             {booking.room.blockRelation?.name || booking.room.block}-{booking.room.number}
                           </Text>
                           <Text size="xs" c="dimmed">
-                            {booking.room.type.replace("_", " ")}
+                            {((booking.room as typeof booking.room & { type: { displayName: string } }).type?.displayName || 'Unknown Type')}
                           </Text>
                         </div>
                       </Table.Td>

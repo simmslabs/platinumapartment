@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import {
   Title,
@@ -13,7 +13,6 @@ import {
   Alert,
   Tabs,
   Grid,
-  Paper,
   Badge,
   ThemeIcon,
   ActionIcon,
@@ -29,14 +28,12 @@ import {
   IconWorld,
   IconCheck,
   IconX,
-  IconEye,
-  IconEyeOff,
   IconRefresh,
   IconAlertTriangle,
 } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
-import { getApiSettings, updateApiSettings, validateApiSettings, getAllSettings, getSetting } from "~/utils/settings.server";
+import { getApiSettings, updateApiSettings, validateApiSettings } from "~/utils/settings.server";
 import { useState, useEffect } from "react";
 
 export const meta: MetaFunction = () => {
@@ -304,7 +301,7 @@ export default function Settings() {
           variant="light"
         >
           Settings are now stored in the database for better management. Changes will be synchronized to the .env file for compatibility. 
-          Use "Sync from .env" to import current environment variables into the database.
+          Use &quot;Sync from .env&quot; to import current environment variables into the database.
         </Alert>
 
         <Tabs defaultValue="api-keys" variant="outline">

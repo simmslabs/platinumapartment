@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { IconWifi, IconWifiOff, IconRefresh2, IconBug2, IconShieldX, IconFileX, IconServerOff } from "@tabler/icons-react";
+import { IconWifi, IconWifiOff, IconRefresh, IconBug, IconShieldX, IconFileX, IconServerOff } from "@tabler/icons-react";
 import { Button, Container, Text, Title, Stack, Group, Progress, Badge } from "@mantine/core";
 import { useState, useEffect } from "react";
 
@@ -80,7 +80,7 @@ export function AdvancedErrorBoundary({
         };
       default:
         return {
-          icon: IconBug2,
+          icon: IconBug,
           title: "Something went wrong",
           message: error?.statusText || error?.data || "An unexpected error occurred",
           color: "red",
@@ -366,7 +366,7 @@ export function AdvancedErrorBoundary({
                           animate={isRetrying ? { rotate: 360 } : {}}
                           transition={isRetrying ? { duration: 1, repeat: Infinity, ease: "linear" } : {}}
                         >
-                          <IconRefresh2 size={16} />
+                          <IconRefresh size={16} />
                         </motion.div>
                       }
                       loading={isRetrying}

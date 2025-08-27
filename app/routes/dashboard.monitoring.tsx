@@ -166,8 +166,8 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      const guests = bookings.map(booking => ({
-        phone: booking.user.phone,
+      const guests = bookings.filter(booking => booking.user.phone).map(booking => ({
+        phone: booking.user.phone!,
         name: `${booking.user.firstName} ${booking.user.lastName}`,
         room: booking.room.number,
         time: format(new Date(booking.checkOut), "MMM dd, h:mm a"),
@@ -297,6 +297,8 @@ export default function Monitoring() {
     if (bookings.length === 0) return;
     
     const booking = bookings[0];
+    if (!booking.user.phone) return;
+    
     const form = new FormData();
     form.append("intent", "send-sms");
     form.append("phone", booking.user.phone);
@@ -345,7 +347,7 @@ export default function Monitoring() {
         </div>
 
         {/* Alerts */}
-        {actionData?.error && (
+        {actionData && "error" in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Error"
@@ -356,7 +358,7 @@ export default function Monitoring() {
           </Alert>
         )}
 
-        {actionData?.success && (
+        {actionData && "success" in actionData && (
           <Alert
             icon={<IconInfoCircle size={16} />}
             title="Success"
@@ -383,7 +385,7 @@ export default function Monitoring() {
                 size="sm"
                 variant="white"
                 leftSection={<IconMessage size={16} />}
-                onClick={() => sendBulkReminders(criticalCheckouts, 'overdue_alert')}
+                onClick={() => sendBulkReminders(criticalCheckouts)}
                 className="critical-action"
               >
                 Send Emergency SMS
@@ -414,7 +416,7 @@ export default function Monitoring() {
                     size="sm"
                     variant="light"
                     leftSection={<IconMessage size={14} />}
-                    onClick={() => sendBulkReminders(overdueCheckouts, 'overdue_alert')}
+                    onClick={() => sendBulkReminders(overdueCheckouts)}
                   >
                     Bulk Alert
                   </Button>
@@ -529,7 +531,7 @@ export default function Monitoring() {
                     size="sm"
                     variant="light"
                     leftSection={<IconMessage size={14} />}
-                    onClick={() => sendBulkReminders(upcomingCheckouts, 'checkout_reminder')}
+                    onClick={() => sendBulkReminders(upcomingCheckouts)}
                   >
                     Send Reminders
                   </Button>
@@ -856,7 +858,7 @@ export default function Monitoring() {
           {selectedGuest && (
             <Form method="post">
               <input type="hidden" name="intent" value="send-sms" />
-              <input type="hidden" name="phone" value={selectedGuest.booking?.user?.phone} />
+              <input type="hidden" name="phone" value={selectedGuest.booking?.user?.phone || ""} />
               <input type="hidden" name="type" value="sms" />
               <Stack>
                 <Alert

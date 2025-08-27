@@ -122,10 +122,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
+  // Get active payment accounts for the dropdown
+  const paymentAccounts = await db.paymentAccount.findMany({
+    where: { isActive: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+  });
+
   return json({ 
     user, 
     securityDeposits, 
-    pendingDeposits 
+    pendingDeposits,
+    paymentAccounts
   });
 }
 
@@ -139,11 +146,37 @@ export async function action({ request }: ActionFunctionArgs) {
     if (intent === "collect") {
       const bookingId = formData.get("bookingId") as string;
       const amount = parseFloat(formData.get("amount") as string);
-      const method = formData.get("method") as PaymentMethod;
+      const paymentAccountId = formData.get("paymentAccountId") as string;
       const transactionId = formData.get("transactionId") as string;
 
-      if (!bookingId || !amount || !method) {
-        return json({ error: "Booking, amount, and payment method are required" }, { status: 400 });
+      if (!bookingId || !amount || !paymentAccountId) {
+        return json({ error: "Booking, amount, and payment account are required" }, { status: 400 });
+      }
+
+      let method: PaymentMethod = "CASH"; // Default for cash payments
+
+      // Handle cash payments differently
+      if (paymentAccountId !== "cash") {
+        // Get the payment account to determine the method
+        const paymentAccount = await db.paymentAccount.findUnique({
+          where: { id: paymentAccountId },
+        });
+
+        if (!paymentAccount) {
+          return json({ error: "Payment account not found" }, { status: 400 });
+        }
+
+        // Map payment account type to method for backward compatibility
+        const methodMapping: Record<string, PaymentMethod> = {
+          CREDIT_CARD: "CREDIT_CARD",
+          DEBIT_CARD: "DEBIT_CARD", 
+          BANK_ACCOUNT: "BANK_TRANSFER",
+          MOBILE_WALLET: "MOBILE_MONEY",
+          DIGITAL_WALLET: "MOBILE_MONEY",
+          CRYPTO_WALLET: "BANK_TRANSFER"
+        };
+
+        method = (methodMapping[paymentAccount.type] || "CASH") as PaymentMethod;
       }
 
       await db.securityDeposit.create({
@@ -211,7 +244,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function SecurityDeposits() {
-  const { user, securityDeposits, pendingDeposits } = useLoaderData<typeof loader>();
+  const { user, securityDeposits, pendingDeposits, paymentAccounts } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [collectOpened, { open: openCollect, close: closeCollect }] = useDisclosure(false);
   const [refundOpened, { open: openRefund, close: closeRefund }] = useDisclosure(false);
@@ -481,7 +514,7 @@ export default function SecurityDeposits() {
                   <Table.Th>Guest</Table.Th>
                   <Table.Th>Room</Table.Th>
                   <Table.Th>Amount</Table.Th>
-                  <Table.Th>Method</Table.Th>
+                  <Table.Th>Account</Table.Th>
                   <Table.Th>Status</Table.Th>
                 <Table.Th>Paid Date</Table.Th>
                 <Table.Th>Refund Info</Table.Th>
@@ -609,15 +642,25 @@ export default function SecurityDeposits() {
               />
 
               <Select
-                label="Payment Method"
-                placeholder="Select method"
-                name="method"
+                label="Payment Account"
+                placeholder="Select payment account"
+                name="paymentAccountId"
                 data={[
-                  { value: "CASH", label: "Cash" },
-                  { value: "CREDIT_CARD", label: "Credit Card" },
-                  { value: "DEBIT_CARD", label: "Debit Card" },
-                  { value: "ONLINE", label: "Online Payment" },
-                  { value: "BANK_TRANSFER", label: "Bank Transfer" },
+                  { value: "cash", label: "Cash Payment (No Account)" },
+                  ...paymentAccounts.map(account => {
+                    const accountDisplay = account.type === 'CREDIT_CARD' || account.type === 'DEBIT_CARD' 
+                      ? `${account.cardBrand} ****${account.cardLast4}` 
+                      : account.type === 'BANK_ACCOUNT'
+                      ? `${account.bankName} - ${account.accountName}`
+                      : account.type === 'MOBILE_WALLET' || account.type === 'DIGITAL_WALLET'
+                      ? `${account.provider} - ${account.accountNumber}`
+                      : account.type.replace('_', ' ');
+                    
+                    return {
+                      value: account.id,
+                      label: `${accountDisplay} ${account.isDefault ? '(Default)' : ''}`.trim()
+                    };
+                  })
                 ]}
                 required
               />

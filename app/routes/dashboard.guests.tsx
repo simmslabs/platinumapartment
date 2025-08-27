@@ -29,7 +29,6 @@ import { IconPlus, IconEdit, IconInfoCircle, IconTrash, IconSearch, IconEye, Ico
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { User, Booking } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { useState, useMemo } from "react";
 import { emailService } from "~/utils/email.server";
@@ -40,12 +39,6 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "Manage apartment guests" },
   ];
 };
-
-type GuestWithBookings = User & {
-  bookings: Booking[];
-};
-
-type LoaderGuest = typeof loader extends (...args: any[]) => Promise<{ json: () => Promise<{ guests: infer T }> }> ? T extends any[] ? T[0] : never : never;
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
@@ -138,7 +131,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
       // Create the user
-      const newUser = await db.user.create({
+      await db.user.create({
         data: {
           email,
           password: hashedPassword,
@@ -280,16 +273,16 @@ export async function action({ request }: ActionFunctionArgs) {
         } else {
           return json({ error: result.error }, { status: response.status });
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Import error:", error);
         return json({ error: "Failed to import guests" }, { status: 500 });
       }
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Guest action error:", error);
-    if (error.code === "P2002") {
+    if (error && typeof error === 'object' && 'code' in error && error.code === "P2002") {
       return json({ error: "Email already exists" }, { status: 400 });
     }
     return json({ error: "Something went wrong. Please try again." }, { status: 500 });

@@ -143,8 +143,8 @@ export function useNetworkErrorHandler() {
     if (!isOnline) {
       throw new Error("No internet connection");
     }
-    return retry(asyncFunction);
-  }, [isOnline, retry]);
+    return errorHandler.retry(asyncFunction);
+  }, [isOnline, errorHandler]);
 
   return {
     ...errorHandler,
