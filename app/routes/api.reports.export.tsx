@@ -42,47 +42,52 @@ export async function loader({ request }: LoaderFunctionArgs) {
       startDate = startOfDay(new Date());
       endDate = endOfDay(new Date());
       break;
-    case "yesterday":
+    case "yesterday": {
       const yesterday = subDays(new Date(), 1);
       startDate = startOfDay(yesterday);
       endDate = endOfDay(yesterday);
       break;
+    }
     case "thisWeek":
       startDate = startOfWeek(new Date());
       endDate = endOfWeek(new Date());
       break;
-    case "lastWeek":
+    case "lastWeek": {
       const lastWeek = subWeeks(new Date(), 1);
       startDate = startOfWeek(lastWeek);
       endDate = endOfWeek(lastWeek);
       break;
+    }
     case "thisMonth":
       startDate = startOfMonth(new Date());
       endDate = endOfMonth(new Date());
       break;
-    case "lastMonth":
+    case "lastMonth": {
       const lastMonth = subMonths(new Date(), 1);
       startDate = startOfMonth(lastMonth);
       endDate = endOfMonth(lastMonth);
       break;
+    }
     case "thisQuarter":
       startDate = startOfQuarter(new Date());
       endDate = endOfQuarter(new Date());
       break;
-    case "lastQuarter":
+    case "lastQuarter": {
       const lastQuarter = subQuarters(new Date(), 1);
       startDate = startOfQuarter(lastQuarter);
       endDate = endOfQuarter(lastQuarter);
       break;
+    }
     case "thisYear":
       startDate = startOfYear(new Date());
       endDate = endOfYear(new Date());
       break;
-    case "lastYear":
+    case "lastYear": {
       const lastYear = subYears(new Date(), 1);
       startDate = startOfYear(lastYear);
       endDate = endOfYear(lastYear);
       break;
+    }
     default:
       startDate = startOfMonth(new Date());
       endDate = endOfMonth(new Date());
@@ -99,7 +104,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
         booking: {
           include: {
             user: { select: { firstName: true, lastName: true, email: true } },
-            room: { select: { number: true, type: true } },
+            room: { 
+              select: { 
+                number: true, 
+                type: {
+                  select: {
+                    displayName: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -113,7 +128,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
         booking: {
           include: {
             user: { select: { firstName: true, lastName: true, email: true } },
-            room: { select: { number: true, type: true } },
+            room: { 
+              select: { 
+                number: true, 
+                type: {
+                  select: {
+                    displayName: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -126,7 +151,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       include: {
         user: { select: { firstName: true, lastName: true, email: true } },
-        room: { select: { number: true, type: true } },
+        room: { 
+          select: { 
+            number: true, 
+            type: {
+              select: {
+                displayName: true,
+                name: true,
+              },
+            },
+          },
+        },
         payment: true,
         securityDeposit: true,
       },
@@ -141,7 +176,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     "Guest Name": `${payment.booking.user.firstName} ${payment.booking.user.lastName}`,
     "Guest Email": payment.booking.user.email,
     "Room Number": payment.booking.room.number,
-    "Room Type": payment.booking.room.type,
+    "Room Type": payment.booking.room.type.displayName,
     "Amount": payment.amount,
     "Method": payment.method.replace("_", " "),
     "Status": payment.status,
@@ -154,7 +189,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     "Guest Name": `${deposit.booking.user.firstName} ${deposit.booking.user.lastName}`,
     "Guest Email": deposit.booking.user.email,
     "Room Number": deposit.booking.room.number,
-    "Room Type": deposit.booking.room.type,
+    "Room Type": deposit.booking.room.type.displayName,
     "Amount": deposit.amount,
     "Status": deposit.status,
     "Refund Amount": deposit.refundAmount || 0,
@@ -170,7 +205,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     "Guest Name": `${booking.user.firstName} ${booking.user.lastName}`,
     "Guest Email": booking.user.email,
     "Room Number": booking.room.number,
-    "Room Type": booking.room.type,
+    "Room Type": booking.room.type.displayName,
     "Total Amount": booking.totalAmount,
     "Status": booking.status,
     "Payment Status": booking.payment?.status || "PENDING",

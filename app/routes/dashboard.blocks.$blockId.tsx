@@ -22,10 +22,8 @@ import {
   IconArrowLeft,
   IconBuilding,
   IconUsers,
-  IconCalendar,
   IconCurrencyDollar,
   IconBed,
-  IconMapPin,
 } from "@tabler/icons-react";
 import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
@@ -55,6 +53,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     include: {
       rooms: {
         include: {
+          type: {
+            select: {
+              displayName: true,
+              name: true,
+            },
+          },
           bookings: {
             where: {
               OR: [
@@ -124,7 +128,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Room type distribution
   const roomTypes = block.rooms.reduce((acc, room) => {
-    acc[room.type] = (acc[room.type] || 0) + 1;
+    const typeName = room.type.displayName;
+    acc[typeName] = (acc[typeName] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -328,7 +333,7 @@ export default function BlockDetails() {
                             </ThemeIcon>
                             <div>
                               <Text fw={500}>Room {room.number}</Text>
-                              <Text size="xs" c="dimmed">{room.type.replace("_", " ")}</Text>
+                              <Text size="xs" c="dimmed">{room.type.displayName}</Text>
                             </div>
                           </Group>
                         </Table.Td>
@@ -396,7 +401,7 @@ export default function BlockDetails() {
                         </ThemeIcon>
                         <div>
                           <Text size="sm" fw={500}>Room {room.number}</Text>
-                          <Text size="xs" c="dimmed">{room.type.replace("_", " ")}</Text>
+                          <Text size="xs" c="dimmed">{room.type.displayName}</Text>
                         </div>
                       </Group>
                       <Stack gap={2} align="flex-end">

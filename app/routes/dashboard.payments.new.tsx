@@ -27,7 +27,6 @@ import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import type { PaymentMethod } from "@prisma/client";
-import { emailService } from "~/utils/email.server";
 import { mnotifyService } from "~/utils/mnotify.server";
 import { useEffect } from "react";
 
@@ -76,7 +75,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         room: {
           select: {
             number: true,
-            type: true,
+            type: {
+              select: {
+                displayName: true,
+                name: true,
+              },
+            },
             block: true,
           },
         },
@@ -108,7 +112,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       room: {
         select: {
           number: true,
-          type: true,
+          type: {
+            select: {
+              displayName: true,
+              name: true,
+            },
+          },
           block: true,
         },
       },
@@ -542,7 +551,7 @@ export default function NewPayment() {
                     Room {selectedBooking.room.number}
                   </Text>
                   <Text size="xs" c="dimmed">
-                    {selectedBooking.room.type} - {selectedBooking.room.block}
+                    {selectedBooking.room.type.displayName} - {selectedBooking.room.block}
                   </Text>
                 </div>
 

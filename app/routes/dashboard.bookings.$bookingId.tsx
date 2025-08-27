@@ -55,7 +55,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           number: true,
-          type: true,
+          type: {
+            select: {
+              displayName: true,
+              name: true,
+            },
+          },
           block: true,
           pricePerNight: true,
           pricingPeriod: true,
@@ -329,7 +334,7 @@ export default function BookingDetail() {
                     </Grid.Col>
                     <Grid.Col span={6}>
                       <Text size="sm" c="dimmed">Room Type</Text>
-                      <Text fw={500}>{booking.room.type}</Text>
+                      <Text fw={500}>{booking.room.type.displayName}</Text>
                     </Grid.Col>
                     <Grid.Col span={6}>
                       <Text size="sm" c="dimmed">Block</Text>

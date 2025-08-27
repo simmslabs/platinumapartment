@@ -38,7 +38,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: { 
       id: true, 
       number: true, 
-      type: true, 
+      type: {
+        select: {
+          displayName: true,
+          name: true,
+        },
+      },
       block: true 
     },
     orderBy: { number: "asc" },
@@ -176,7 +181,7 @@ export default function NewMaintenanceTask() {
                 name="roomId"
                 data={rooms.map(room => ({
                   value: room.id,
-                  label: `Room ${room.number} (Block ${room.block}) - ${room.type.replace("_", " ")}`
+                  label: `Room ${room.number} (Block ${room.block}) - ${room.type.displayName}`
                 }))}
                 required
                 searchable

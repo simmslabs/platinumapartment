@@ -40,7 +40,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const maintenanceLogs = await db.maintenanceLog.findMany({
     include: {
       room: {
-        select: { number: true, type: true },
+        select: { 
+          number: true, 
+          type: {
+            select: {
+              displayName: true,
+              name: true,
+            },
+          },
+        },
       },
       asset: {
         select: { 
@@ -318,7 +326,7 @@ export default function Maintenance() {
                     <div>
                       <Text fw={500}>Room {log.room.number}</Text>
                       <Text size="sm" c="dimmed">
-                        {log.room.type.replace("_", " ")}
+                        {log.room.type.displayName}
                       </Text>
                     </div>
                   </Table.Td>

@@ -55,6 +55,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const room = await db.room.findUnique({
     where: { id: roomId },
     include: {
+      type: {
+        select: {
+          displayName: true,
+          name: true,
+        },
+      },
       blockRelation: true,
       assets: {
         orderBy: [
@@ -196,19 +202,6 @@ export default function RoomDetails() {
   const { user, room, analytics } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  // Define types for better TypeScript support
-  interface GuestStat {
-    user: {
-      id: string;
-      firstName: string;
-      lastName: string;
-      email: string;
-    };
-    bookings: number;
-    totalSpent: number;
-    lastVisit: Date;
-  }
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case "AVAILABLE":
@@ -277,7 +270,7 @@ export default function RoomDetails() {
                   <ThemeIcon size="lg" variant="light" color="blue">
                     <IconBed size={24} />
                   </ThemeIcon>
-                  <Badge variant="light">{room.type.replace("_", " ")}</Badge>
+                  <Badge variant="light">{room.type.displayName}</Badge>
                 </Group>
 
                 <Stack gap="xs">
@@ -461,7 +454,7 @@ export default function RoomDetails() {
               <Title order={4} mb="md">Top Guests</Title>
               {analytics.topGuests.length > 0 ? (
                 <Stack gap="md">
-                  {(analytics.topGuests as GuestStat[]).map((guest) => (
+                  {analytics.topGuests.map((guest) => (
                     <Paper key={guest.user.id} p="md" withBorder>
                       <Group justify="space-between">
                         <Group>
@@ -510,7 +503,7 @@ export default function RoomDetails() {
 
               {room.bookings && room.bookings.length > 0 ? (
                 <Stack gap="sm">
-                  {room.bookings.slice(0, 5).map((booking: any) => (
+                  {room.bookings.slice(0, 5).map((booking) => (
                     <Paper key={booking.id} p="sm" withBorder>
                       <Group justify="space-between">
                         <div>
