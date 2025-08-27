@@ -2,7 +2,6 @@ import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "@remi
 import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form } from "@remix-run/react";
 import {
-  Badge,
   Button,
   Stack,
   Group,
@@ -452,7 +451,7 @@ export default function Monitoring() {
                             <div className="info-group">
                               <span className="info-label">Room</span>
                               <span className="info-value">Unit {booking.room.number}</span>
-                              <span className="info-detail">{booking.room.type.replace("_", " ")}</span>
+                              <span className="info-detail">{booking.room.type.displayName}</span>
                             </div>
                           </div>
                           
@@ -579,7 +578,7 @@ export default function Monitoring() {
                             <div className="info-group">
                               <span className="info-label">Room</span>
                               <span className="info-value">Unit {booking.room.number}</span>
-                              <span className="info-detail">{booking.room.type.replace("_", " ")}</span>
+                              <span className="info-detail">{booking.room.type.displayName}</span>
                             </div>
                           </div>
                           
@@ -727,7 +726,7 @@ export default function Monitoring() {
                             <div className="info-group">
                               <span className="info-label">Room</span>
                               <span className="info-value">Unit {booking.room.number}</span>
-                              <span className="info-detail">{booking.room.type.replace("_", " ")}</span>
+                              <span className="info-detail">{booking.room.type.displayName}</span>
                             </div>
                           </div>
                           
