@@ -1,4 +1,4 @@
-import { MantineThemeOverride, rem } from '@mantine/core';
+import { MantineThemeOverride, MantineTheme, rem } from '@mantine/core';
 
 export const analyticsTheme: MantineThemeOverride = {
   // Color palette inspired by the dashboard
@@ -138,7 +138,7 @@ export const analyticsTheme: MantineThemeOverride = {
         radius: 'md',
         p: 'md',
       },
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         root: {
           backgroundColor: theme.white,
           border: `1px solid ${theme.colors.gray[2]}`,
@@ -151,7 +151,7 @@ export const analyticsTheme: MantineThemeOverride = {
       defaultProps: {
         radius: 'md',
       },
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         root: {
           fontWeight: 500,
           border: 'none',
@@ -188,7 +188,7 @@ export const analyticsTheme: MantineThemeOverride = {
       defaultProps: {
         radius: 'md',
       },
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         input: {
           border: `1px solid ${theme.colors.gray[3]}`,
           backgroundColor: theme.white,
@@ -211,7 +211,7 @@ export const analyticsTheme: MantineThemeOverride = {
       defaultProps: {
         radius: 'md',
       },
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         input: {
           border: `1px solid ${theme.colors.gray[3]}`,
           backgroundColor: theme.white,
@@ -229,7 +229,7 @@ export const analyticsTheme: MantineThemeOverride = {
       defaultProps: {
         radius: 'sm',
       },
-      styles: (theme) => ({
+      styles: {
         root: {
           fontWeight: 500,
           fontSize: rem(11),
@@ -237,7 +237,7 @@ export const analyticsTheme: MantineThemeOverride = {
           paddingLeft: rem(8),
           paddingRight: rem(8),
         },
-      }),
+      },
     },
 
     // Card styling for dashboard widgets
@@ -247,7 +247,7 @@ export const analyticsTheme: MantineThemeOverride = {
         radius: 'md',
         padding: 'lg',
       },
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         root: {
           backgroundColor: theme.white,
           border: `1px solid ${theme.colors.gray[2]}`,
@@ -263,7 +263,7 @@ export const analyticsTheme: MantineThemeOverride = {
 
     // Table styling
     Table: {
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         root: {
           backgroundColor: theme.white,
         },
@@ -296,7 +296,7 @@ export const analyticsTheme: MantineThemeOverride = {
 
     // Tabs styling
     Tabs: {
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         tab: {
           fontWeight: 500,
           color: theme.colors.gray[6],
@@ -315,7 +315,7 @@ export const analyticsTheme: MantineThemeOverride = {
 
     // Modal styling
     Modal: {
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         content: {
           borderRadius: theme.radius.lg,
         },
@@ -330,7 +330,7 @@ export const analyticsTheme: MantineThemeOverride = {
 
     // Notification styling
     Notification: {
-      styles: (theme) => ({
+      styles: (theme: MantineTheme) => ({
         root: {
           borderRadius: theme.radius.md,
           padding: rem(16),
@@ -342,33 +342,6 @@ export const analyticsTheme: MantineThemeOverride = {
       }),
     },
   },
-
-  // Global styles
-  globalStyles: (theme) => ({
-    body: {
-      backgroundColor: theme.colors.gray[0],
-      color: theme.colors.gray[8],
-    },
-    
-    // Scrollbar styling
-    '*::-webkit-scrollbar': {
-      width: rem(6),
-      height: rem(6),
-    },
-    
-    '*::-webkit-scrollbar-track': {
-      backgroundColor: theme.colors.gray[1],
-    },
-    
-    '*::-webkit-scrollbar-thumb': {
-      backgroundColor: theme.colors.gray[4],
-      borderRadius: rem(3),
-      
-      '&:hover': {
-        backgroundColor: theme.colors.gray[5],
-      },
-    },
-  }),
 
   // Other theme properties
   other: {
@@ -390,5 +363,32 @@ export const analyticsTheme: MantineThemeOverride = {
     ],
   },
 };
+
+// Global styles function (can be used with MantineProvider's globalStyles prop)
+export const globalStyles = (theme: MantineTheme) => ({
+  body: {
+    backgroundColor: theme.colors.gray[0],
+    color: theme.colors.gray[8],
+  },
+  
+  // Scrollbar styling
+  '*::-webkit-scrollbar': {
+    width: rem(6),
+    height: rem(6),
+  },
+  
+  '*::-webkit-scrollbar-track': {
+    backgroundColor: theme.colors.gray[1],
+  },
+  
+  '*::-webkit-scrollbar-thumb': {
+    backgroundColor: theme.colors.gray[4],
+    borderRadius: rem(3),
+    
+    '&:hover': {
+      backgroundColor: theme.colors.gray[5],
+    },
+  },
+});
 
 export const theme = analyticsTheme;
