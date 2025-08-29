@@ -646,15 +646,14 @@ export default function SecurityDeposits() {
                 placeholder="Select payment account"
                 name="paymentAccountId"
                 data={[
-                  { value: "cash", label: "Cash Payment (No Account)" },
                   ...(paymentAccounts || []).map(account => {
                     const accountDisplay = account.type === 'CREDIT_CARD' || account.type === 'DEBIT_CARD' 
-                      ? `${account.cardBrand} ****${account.cardLast4}` 
+                      ? `${account.cardBrand || 'Card'} ****${account.cardLast4 || '0000'}` 
                       : account.type === 'BANK_ACCOUNT'
-                      ? `${account.bankName} - ${account.accountName}`
+                      ? `${account.bankName || 'Bank'} - ${account.accountName || 'Account'}`
                       : account.type === 'MOBILE_WALLET' || account.type === 'DIGITAL_WALLET'
-                      ? `${account.provider} - ${account.accountNumber}`
-                      : account.type.replace('_', ' ');
+                      ? `${account.provider || 'Wallet'} - ${account.accountNumber || 'Account'}`
+                      : account.type?.replace('_', ' ') || 'Unknown';
                     
                     return {
                       value: account.id,
