@@ -18,7 +18,8 @@
     "db:reset": "prisma migrate reset --force",
     "db:test": "tsx scripts/test-db.ts",
     "excel:sample": "bun scripts/create-sample-excel.js",
-    "payment:check": "bun scripts/check-payment-data.js"
+    "payment:check": "bun scripts/check-payment-data.js",
+    "seed:blocks": "tsx scripts/seed-blocks-from-csv.ts"
   },
   "dependencies": {
     "@mantine/charts": "^8.2.7",

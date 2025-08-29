@@ -66,23 +66,25 @@ export async function action({ request }: ActionFunctionArgs) {
 
           const temporaryPassword = generatePassword();
 
-          if (!firstName || !lastName || !email) {
-            results.errors.push(`Row ${i + 1}: Missing required fields (firstName, lastName, email)`);
+          if (!firstName || !lastName) {
+            results.errors.push(`Row ${i + 1}: Missing required fields (firstName, lastName)`);
             continue;
           }
 
-          // Validate email format
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(email)) {
-            results.errors.push(`Row ${i + 1}: Invalid email format - ${email}`);
-            continue;
-          }
+          // Validate email format if email is provided
+          if (email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+              results.errors.push(`Row ${i + 1}: Invalid email format - ${email}`);
+              continue;
+            }
 
-          // Check if email already exists
-          const existingUser = await db.user.findUnique({ where: { email } });
-          if (existingUser) {
-            results.errors.push(`Row ${i + 1}: Email already exists - ${email}`);
-            continue;
+            // Check if email already exists
+            const existingUser = await db.user.findUnique({ where: { email } });
+            if (existingUser) {
+              results.errors.push(`Row ${i + 1}: Email already exists - ${email}`);
+              continue;
+            }
           }
 
           // Hash the password
@@ -91,7 +93,7 @@ export async function action({ request }: ActionFunctionArgs) {
           // Create the user
           const newUser = await db.user.create({
             data: {
-              email,
+              email: email || null, // Make email optional
               password: hashedPassword,
               firstName: String(firstName).trim(),
               lastName: String(lastName).trim(),
@@ -104,23 +106,25 @@ export async function action({ request }: ActionFunctionArgs) {
           results.imported.push({
             firstName,
             lastName,
-            email,
+            email: email || null,
           });
 
-          // Send welcome email (async, don't wait)
-          emailService.sendWelcomeEmail({
-            firstName,
-            lastName,
-            email,
-            temporaryPassword: temporaryPassword,
-          }).catch(error => {
-            console.error(`Failed to send welcome email to ${email}:`, error);
-          });
+          // Send welcome email only if email is provided (async, don't wait)
+          if (email) {
+            emailService.sendWelcomeEmail({
+              firstName,
+              lastName,
+              email,
+              temporaryPassword: temporaryPassword,
+            }).catch(error => {
+              console.error(`Failed to send welcome email to ${email}:`, error);
+            });
+          }
 
           results.success++;
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error(`Error processing row ${i + 1}:`, error);
-          results.errors.push(`Row ${i + 1}: ${error.message}`);
+          results.errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
@@ -130,9 +134,9 @@ export async function action({ request }: ActionFunctionArgs) {
         message: `Import completed. ${results.success} guests imported successfully, ${results.errors.length} errors.`
       });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Excel import error:", error);
-      return json({ error: `Failed to process Excel file: ${error.message}` }, { status: 500 });
+      return json({ error: `Failed to process Excel file: ${error instanceof Error ? error.message : 'Unknown error'}` }, { status: 500 });
     }
   }
 

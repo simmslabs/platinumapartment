@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Link, Outlet, useLocation } from "@remix-run/react";
+import { useLoaderData, useActionData, Link, Outlet, useLocation, useFetcher } from "@remix-run/react";
 import {
   Title,
   Table,
@@ -25,16 +25,23 @@ import {
   Checkbox,
   Progress,
   Loader,
+  Pagination,
 } from "@mantine/core";
 import { format } from "date-fns";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useDebouncedValue } from "@mantine/hooks";
 import { IconPlus, IconEdit, IconInfoCircle, IconTrash, IconSearch, IconEye, IconUsers, IconWallet, IconTrendingUp, IconClock, IconUpload, IconDownload, IconFileSpreadsheet, IconTrashX } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import bcrypt from "bcryptjs";
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { emailService } from "~/utils/email.server";
+
+// Type for action responses
+type ActionResponse = {
+  success?: string;
+  error?: string;
+};
 
 export const meta: MetaFunction = () => {
   return [
@@ -47,8 +54,48 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
 
+  // Parse URL parameters for pagination and search
+  const url = new URL(request.url);
+  const page = parseInt(url.searchParams.get("page") || "1");
+  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const search = url.searchParams.get("search") || "";
+  const status = url.searchParams.get("status") || "all";
+
+  // Ensure valid pagination parameters
+  const validLimit = Math.min(Math.max(limit, 10), 500); // Between 10 and 500
+  const validPage = Math.max(page, 1);
+
+  // Calculate offset for pagination
+  const offset = (validPage - 1) * validLimit;
+
+  // Build where condition for search and filtering
+  const whereCondition: { 
+    role: "TENANT"; 
+    OR?: Array<{
+      firstName?: { contains: string; mode: "insensitive" };
+      lastName?: { contains: string; mode: "insensitive" };
+      email?: { contains: string; mode: "insensitive" };
+      phone?: { contains: string; mode: "insensitive" };
+    }>
+  } = { role: "TENANT" };
+  
+  if (search) {
+    whereCondition.OR = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+      { phone: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  // Get total count for pagination
+  const totalGuests = await db.user.count({
+    where: whereCondition,
+  });
+
+  // Get paginated guests with optimized query
   const guests = await db.user.findMany({
-    where: { role: "TENANT" },
+    where: whereCondition,
     include: {
       bookings: {
         include: {
@@ -58,39 +105,81 @@ export async function loader({ request }: LoaderFunctionArgs) {
         take: 3, // Show only last 3 bookings
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [
+      { createdAt: "desc" },
+      { id: "desc" }, // Secondary sort for consistent pagination
+    ],
+    take: validLimit,
+    skip: offset,
   });
 
-  // Calculate overall statistics
-  const totalRevenue = guests.reduce((sum, guest) => 
-    sum + guest.bookings.reduce((bookingSum, booking) => bookingSum + booking.totalAmount, 0), 0
-  );
+  // Filter by status if specified (this is done in memory for now, could be optimized)
+  let filteredGuests = guests;
+  if (status !== "all") {
+    filteredGuests = guests.filter(guest => {
+      const hasActiveBookings = guest.bookings.some((booking: { status: string }) => 
+        ["CONFIRMED", "CHECKED_IN"].includes(booking.status)
+      );
+      return status === "active" ? hasActiveBookings : !hasActiveBookings;
+    });
+  }
 
-  const totalPaid = guests.reduce((sum, guest) => 
-    sum + guest.bookings.reduce((bookingSum, booking) => 
-      bookingSum + (booking.payment?.status === "COMPLETED" ? booking.payment.amount : 0), 0
-    ), 0
-  );
+  // Calculate overall statistics (optimized - use separate queries)
+  const totalRevenue = await db.booking.aggregate({
+    _sum: { totalAmount: true },
+    where: { user: { role: "TENANT" } },
+  });
 
-  const totalPending = guests.reduce((sum, guest) => 
-    sum + guest.bookings.reduce((bookingSum, booking) => 
-      bookingSum + (booking.payment?.status === "PENDING" ? booking.totalAmount : 0), 0
-    ), 0
-  );
+  const totalPaid = await db.payment.aggregate({
+    _sum: { amount: true },
+    where: { 
+      status: "COMPLETED",
+      booking: { user: { role: "TENANT" } }
+    },
+  });
 
-  const activeGuests = guests.filter(guest => 
-    guest.bookings.some(booking => ["CONFIRMED", "CHECKED_IN"].includes(booking.status))
-  ).length;
+  const totalPending = await db.payment.aggregate({
+    _sum: { amount: true },
+    where: { 
+      status: "PENDING",
+      booking: { user: { role: "TENANT" } }
+    },
+  });
+
+  const activeGuestsCount = await db.user.count({
+    where: {
+      role: "TENANT",
+      bookings: {
+        some: {
+          status: { in: ["CONFIRMED", "CHECKED_IN"] }
+        }
+      }
+    },
+  });
+
+  const totalPages = Math.ceil(totalGuests / validLimit);
 
   return json({ 
     user, 
-    guests, 
+    guests: filteredGuests,
+    pagination: {
+      currentPage: validPage,
+      totalPages,
+      totalItems: totalGuests,
+      itemsPerPage: validLimit,
+      hasNextPage: validPage < totalPages,
+      hasPreviousPage: validPage > 1,
+    },
+    searchParams: {
+      search,
+      status,
+    },
     stats: {
-      totalGuests: guests.length,
-      activeGuests,
-      totalRevenue,
-      totalPaid,
-      totalPending,
+      totalGuests,
+      activeGuests: activeGuestsCount,
+      totalRevenue: totalRevenue._sum.totalAmount || 0,
+      totalPaid: totalPaid._sum.amount || 0,
+      totalPending: totalPending._sum.amount || 0,
     }
   });
 }
@@ -108,14 +197,16 @@ export async function action({ request }: ActionFunctionArgs) {
       const phone = formData.get("phone") as string;
       const address = formData.get("address") as string;
 
-      if (!email || !firstName || !lastName) {
-        return json({ error: "Email, first name, and last name are required" }, { status: 400 });
+      if (!firstName || !lastName) {
+        return json({ error: "First name and last name are required" }, { status: 400 });
       }
 
-      // Check if email already exists
-      const existingUser = await db.user.findUnique({ where: { email } });
-      if (existingUser) {
-        return json({ error: "A user with this email already exists" }, { status: 400 });
+      // Check if email already exists (only if email is provided)
+      if (email) {
+        const existingUser = await db.user.findUnique({ where: { email } });
+        if (existingUser) {
+          return json({ error: "A user with this email already exists" }, { status: 400 });
+        }
       }
 
       // Generate a random temporary password
@@ -136,7 +227,7 @@ export async function action({ request }: ActionFunctionArgs) {
       // Create the user
       await db.user.create({
         data: {
-          email,
+          email: email || null, // Make email optional
           password: hashedPassword,
           firstName,
           lastName,
@@ -146,21 +237,27 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      // Send welcome email (don't block the response if email fails)
-      try {
-        await emailService.sendWelcomeEmail({
-          firstName,
-          lastName,
-          email,
-          temporaryPassword: temporaryPassword, // Send the generated password in the email
-        });
-        console.log(`Welcome email sent to ${email}`);
-      } catch (emailError) {
-        console.error(`Failed to send welcome email to ${email}:`, emailError);
-        // Don't fail the user creation if email fails
+      // Send welcome email only if email is provided (don't block the response if email fails)
+      if (email) {
+        try {
+          await emailService.sendWelcomeEmail({
+            firstName,
+            lastName,
+            email,
+            temporaryPassword: temporaryPassword, // Send the generated password in the email
+          });
+          console.log(`Welcome email sent to ${email}`);
+        } catch (emailError) {
+          console.error(`Failed to send welcome email to ${email}:`, emailError);
+          // Don't fail the user creation if email fails
+        }
       }
 
-      return json({ success: "Tenant created successfully with auto-generated password sent via email!" });
+      return json({ 
+        success: email 
+          ? "Tenant created successfully with auto-generated password sent via email!" 
+          : "Tenant created successfully with auto-generated password!"
+      });
     }
 
     if (intent === "update") {
@@ -241,6 +338,8 @@ export async function action({ request }: ActionFunctionArgs) {
           await tx.user.delete({
             where: { id: guestId }
           });
+        }, {
+          timeout: 30000, // 30 seconds timeout
         });
 
         return json({ success: "Tenant and all related data deleted successfully" });
@@ -265,57 +364,60 @@ export async function action({ request }: ActionFunctionArgs) {
 
       try {
         // Use transaction to ensure all related data is deleted in correct order
+        // Use batch operations for better performance
         await db.$transaction(async (tx) => {
-          // For each guest, delete all related data then the guest
-          for (const guestId of guestIdArray) {
-            // First, delete all payments related to this guest's bookings
-            await tx.payment.deleteMany({
-              where: {
-                booking: {
-                  userId: guestId
-                }
+          // Delete all payments related to these guests' bookings in one operation
+          await tx.payment.deleteMany({
+            where: {
+              booking: {
+                userId: { in: guestIdArray }
               }
-            });
+            }
+          });
 
-            // Delete all transactions related to this guest's bookings
-            await tx.transaction.deleteMany({
-              where: {
-                booking: {
-                  userId: guestId
-                }
+          // Delete all transactions related to these guests' bookings in one operation
+          await tx.transaction.deleteMany({
+            where: {
+              booking: {
+                userId: { in: guestIdArray }
               }
-            });
+            }
+          });
 
-            // Delete all receipts related to this guest's bookings
-            await tx.receipt.deleteMany({
-              where: {
-                booking: {
-                  userId: guestId
-                }
+          // Delete all receipts related to these guests' bookings in one operation
+          await tx.receipt.deleteMany({
+            where: {
+              booking: {
+                userId: { in: guestIdArray }
               }
-            });
+            }
+          });
 
-            // Delete all security deposits related to this guest's bookings
-            await tx.securityDeposit.deleteMany({
-              where: {
-                booking: {
-                  userId: guestId
-                }
+          // Delete all security deposits related to these guests' bookings in one operation
+          await tx.securityDeposit.deleteMany({
+            where: {
+              booking: {
+                userId: { in: guestIdArray }
               }
-            });
+            }
+          });
 
-            // Delete all bookings for this guest
-            await tx.booking.deleteMany({
-              where: {
-                userId: guestId
-              }
-            });
+          // Delete all bookings for these guests in one operation
+          await tx.booking.deleteMany({
+            where: {
+              userId: { in: guestIdArray }
+            }
+          });
 
-            // Finally, delete the guest
-            await tx.user.delete({
-              where: { id: guestId }
-            });
-          }
+          // Finally, delete all the guests in one operation
+          await tx.user.deleteMany({
+            where: { 
+              id: { in: guestIdArray },
+              role: "TENANT" // Safety check to only delete tenants
+            }
+          });
+        }, {
+          timeout: 30000, // 30 seconds timeout
         });
 
         return json({ 
@@ -343,9 +445,11 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Tenants() {
-  const { user, guests, stats } = useLoaderData<typeof loader>();
+  const { user, guests, stats, pagination, searchParams } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
+  const deleteFetcher = useFetcher();
+  const bulkDeleteFetcher = useFetcher();
   const [importOpened, { open: openImport, close: closeImport }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
   const [bulkDeleteModalOpened, { open: openBulkDeleteModal, close: closeBulkDeleteModal }] = useDisclosure(false);
@@ -353,12 +457,12 @@ export default function Tenants() {
   const [selectedGuests, setSelectedGuests] = useState<Set<string>>(new Set());
   const [confirmationText, setConfirmationText] = useState("");
   const [bulkConfirmationText, setBulkConfirmationText] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState(searchParams.search || "");
+  const [debouncedSearchQuery] = useDebouncedValue(searchQuery, 500);
+  const [filterStatus, setFilterStatus] = useState<string>(searchParams.status || "all");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [processingProgress, setProcessingProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'complete' | 'error'>('idle');
   const [uploadResults, setUploadResults] = useState<{
     total: number;
@@ -367,24 +471,114 @@ export default function Tenants() {
     imported: Array<{ firstName: string; lastName: string; email: string }>;
   } | null>(null);
 
-  // Filter guests based on search query and status
-  const filteredGuests = useMemo(() => {
-    const filtered = guests.filter((guest) => {
-      const matchesSearch = 
-        guest.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        guest.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        guest.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (guest.phone && guest.phone.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Use guests directly from loader (already filtered and paginated)
+  const filteredGuests = guests;
 
-      const matchesStatus = filterStatus === "all" || 
-        (filterStatus === "active" && guest.bookings.some(b => ["CONFIRMED", "CHECKED_IN"].includes(b.status))) ||
-        (filterStatus === "inactive" && !guest.bookings.some(b => ["CONFIRMED", "CHECKED_IN"].includes(b.status)));
+  // Handle debounced search
+  useEffect(() => {
+    if (debouncedSearchQuery !== searchParams.search) {
+      updateSearchParams({ search: debouncedSearchQuery });
+    }
+  }, [debouncedSearchQuery, searchParams.search]);
 
-      return matchesSearch && matchesStatus;
-    });
+  // Handle delete fetcher responses
+  useEffect(() => {
+    if (deleteFetcher.state === "idle" && deleteFetcher.data) {
+      const data = deleteFetcher.data as ActionResponse;
+      if (data?.success) {
+        // Show success notification and refresh
+        console.log(data.success);
+        window.location.reload();
+      } else if (data?.error) {
+        // Show error notification
+        console.error(data.error);
+        alert(data.error);
+      }
+    }
+  }, [deleteFetcher.state, deleteFetcher.data]);
 
-    return filtered;
-  }, [guests, searchQuery, filterStatus]);
+  // Handle bulk delete fetcher responses
+  useEffect(() => {
+    if (bulkDeleteFetcher.state === "idle" && bulkDeleteFetcher.data) {
+      const data = bulkDeleteFetcher.data as ActionResponse;
+      if (data?.success) {
+        // Show success notification and refresh
+        console.log(data.success);
+        window.location.reload();
+      } else if (data?.error) {
+        // Show error notification
+        console.error(data.error);
+        alert(data.error);
+      }
+    }
+  }, [bulkDeleteFetcher.state, bulkDeleteFetcher.data]);
+
+  // Helper function to update URL with search params
+  const updateSearchParams = (newParams: { search?: string; status?: string; page?: number; limit?: number }) => {
+    const url = new URL(window.location.href);
+    
+    if (newParams.search !== undefined) {
+      if (newParams.search) {
+        url.searchParams.set('search', newParams.search);
+      } else {
+        url.searchParams.delete('search');
+      }
+    }
+    
+    if (newParams.status !== undefined) {
+      if (newParams.status && newParams.status !== 'all') {
+        url.searchParams.set('status', newParams.status);
+      } else {
+        url.searchParams.delete('status');
+      }
+    }
+    
+    if (newParams.page !== undefined) {
+      if (newParams.page > 1) {
+        url.searchParams.set('page', newParams.page.toString());
+      } else {
+        url.searchParams.delete('page');
+      }
+    }
+
+    if (newParams.limit !== undefined) {
+      if (newParams.limit !== 20) { // 20 is default
+        url.searchParams.set('limit', newParams.limit.toString());
+      } else {
+        url.searchParams.delete('limit');
+      }
+    }
+    
+    // Reset to page 1 when search, filter, or limit changes
+    if (newParams.search !== undefined || newParams.status !== undefined || newParams.limit !== undefined) {
+      url.searchParams.delete('page');
+    }
+    
+    window.location.href = url.toString();
+  };
+
+  // Handle search change with debouncing
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+  };
+
+  // Handle filter change
+  const handleFilterChange = (value: string | null) => {
+    const newStatus = value || "all";
+    setFilterStatus(newStatus);
+    updateSearchParams({ status: newStatus });
+  };
+
+  // Handle pagination change
+  const handlePageChange = (page: number) => {
+    updateSearchParams({ page });
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (value: string | null) => {
+    const newLimit = parseInt(value || "20");
+    updateSearchParams({ limit: newLimit });
+  };
 
   const handleDeleteGuest = (guest: typeof guests[0]) => {
     setGuestToDelete(guest);
@@ -419,25 +613,15 @@ export default function Tenants() {
 
   const confirmBulkDelete = () => {
     if (selectedGuests.size > 0 && bulkConfirmationText === "BULK DELETE") {
-      // Create a form and submit it
-      const form = document.createElement('form');
-      form.method = 'post';
-      form.style.display = 'none';
-      
-      const intentInput = document.createElement('input');
-      intentInput.type = 'hidden';
-      intentInput.name = 'intent';
-      intentInput.value = 'bulkDelete';
-      
-      const guestIdsInput = document.createElement('input');
-      guestIdsInput.type = 'hidden';
-      guestIdsInput.name = 'guestIds';
-      guestIdsInput.value = Array.from(selectedGuests).join(',');
-      
-      form.appendChild(intentInput);
-      form.appendChild(guestIdsInput);
-      document.body.appendChild(form);
-      form.submit();
+      bulkDeleteFetcher.submit(
+        {
+          intent: "bulkDelete",
+          guestIds: Array.from(selectedGuests).join(','),
+        },
+        {
+          method: "post",
+        }
+      );
       
       closeBulkDeleteModal();
       setSelectedGuests(new Set());
@@ -449,7 +633,6 @@ export default function Tenants() {
     setIsUploading(true);
     setUploadStatus('uploading');
     setUploadProgress(0);
-    setProcessingProgress(0);
     setUploadResults(null);
 
     try {
@@ -485,7 +668,6 @@ export default function Tenants() {
       
       if (response.ok) {
         setUploadStatus('complete');
-        setProcessingProgress(100);
         setUploadResults(result.results);
       } else {
         setUploadStatus('error');
@@ -502,7 +684,6 @@ export default function Tenants() {
   const resetUpload = () => {
     setUploadStatus('idle');
     setUploadProgress(0);
-    setProcessingProgress(0);
     setUploadResults(null);
     setImportFile(null);
   };
@@ -516,25 +697,15 @@ export default function Tenants() {
 
   const confirmDelete = () => {
     if (guestToDelete && confirmationText === "FORCE DELETE") {
-      // Create a form and submit it
-      const form = document.createElement('form');
-      form.method = 'post';
-      form.style.display = 'none';
-      
-      const intentInput = document.createElement('input');
-      intentInput.type = 'hidden';
-      intentInput.name = 'intent';
-      intentInput.value = 'delete';
-      
-      const guestIdInput = document.createElement('input');
-      guestIdInput.type = 'hidden';
-      guestIdInput.name = 'guestId';
-      guestIdInput.value = guestToDelete.id;
-      
-      form.appendChild(intentInput);
-      form.appendChild(guestIdInput);
-      document.body.appendChild(form);
-      form.submit();
+      deleteFetcher.submit(
+        {
+          intent: "delete",
+          guestId: guestToDelete.id,
+        },
+        {
+          method: "post",
+        }
+      );
       
       closeDeleteModal();
       setGuestToDelete(null);
@@ -720,13 +891,13 @@ export default function Tenants() {
                 placeholder="Search guests..."
                 leftSection={<IconSearch size={16} />}
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                onChange={(event) => handleSearchChange(event.currentTarget.value)}
                 style={{ flexGrow: 1 }}
               />
               <Select
                 placeholder="Filter by status"
                 value={filterStatus}
-                onChange={(value) => setFilterStatus(value || "all")}
+                onChange={handleFilterChange}
                 data={[
                   { value: "all", label: "All Tenants" },
                   { value: "active", label: "Active Tenants" },
@@ -740,8 +911,27 @@ export default function Tenants() {
           <Card>
             <Group justify="space-between" mb="md">
               <Text size="sm" c="dimmed">
-                Showing {filteredGuests.length} of {guests.length} guests
+                Showing {filteredGuests.length} of {pagination.totalItems} guests 
+                (Page {pagination.currentPage} of {pagination.totalPages})
               </Text>
+              <Group gap="xs">
+                <Text size="sm" c="dimmed">Show:</Text>
+                <Select
+                  size="sm"
+                  value={pagination.itemsPerPage.toString()}
+                  onChange={handlePageSizeChange}
+                  data={[
+                    { value: "10", label: "10" },
+                    { value: "20", label: "20" },
+                    { value: "50", label: "50" },
+                    { value: "100", label: "100" },
+                    { value: "200", label: "200" },
+                    { value: "500", label: "500" },
+                  ]}
+                  style={{ width: 80 }}
+                />
+                <Text size="sm" c="dimmed">per page</Text>
+              </Group>
             </Group>
             <Table.ScrollContainer minWidth={800}>
               <Table striped highlightOnHover>
@@ -906,6 +1096,45 @@ export default function Tenants() {
             </Table.ScrollContainer>
           </Card>
 
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <Card withBorder>
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Text size="sm" c="dimmed">
+                    Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {' '}
+                    {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of {' '}
+                    {pagination.totalItems} entries
+                  </Text>
+                  <Group gap="xs">
+                    <Text size="sm" c="dimmed">Jump to page:</Text>
+                    <Select
+                      size="sm"
+                      value={pagination.currentPage.toString()}
+                      onChange={(value) => value && handlePageChange(parseInt(value))}
+                      data={Array.from({ length: pagination.totalPages }, (_, i) => ({
+                        value: (i + 1).toString(),
+                        label: (i + 1).toString(),
+                      }))}
+                      style={{ width: 80 }}
+                    />
+                  </Group>
+                </Group>
+                <Group justify="center">
+                  <Pagination
+                    value={pagination.currentPage}
+                    onChange={handlePageChange}
+                    total={pagination.totalPages}
+                    size="md"
+                    withEdges
+                    siblings={1}
+                    boundaries={1}
+                  />
+                </Group>
+              </Stack>
+            </Card>
+          )}
+
           {/* Bulk Delete Confirmation Modal */}
           <Modal 
             opened={bulkDeleteModalOpened} 
@@ -997,10 +1226,14 @@ export default function Tenants() {
                 <Button 
                   color="red" 
                   onClick={confirmBulkDelete}
-                  disabled={bulkConfirmationText !== "BULK DELETE"}
+                  disabled={bulkConfirmationText !== "BULK DELETE" || bulkDeleteFetcher.state === "submitting"}
+                  loading={bulkDeleteFetcher.state === "submitting"}
                   leftSection={<IconTrashX size={16} />}
                 >
-                  Delete {selectedGuests.size} Tenant{selectedGuests.size > 1 ? 's' : ''}
+                  {bulkDeleteFetcher.state === "submitting" 
+                    ? "Deleting..." 
+                    : `Delete ${selectedGuests.size} Tenant${selectedGuests.size > 1 ? 's' : ''}`
+                  }
                 </Button>
               </Group>
             </Stack>
@@ -1087,10 +1320,11 @@ export default function Tenants() {
                 <Button 
                   color="red" 
                   onClick={confirmDelete}
-                  disabled={confirmationText !== "FORCE DELETE"}
+                  disabled={confirmationText !== "FORCE DELETE" || deleteFetcher.state === "submitting"}
+                  loading={deleteFetcher.state === "submitting"}
                   leftSection={<IconTrash size={16} />}
                 >
-                  Force Delete Tenant
+                  {deleteFetcher.state === "submitting" ? "Deleting..." : "Force Delete Tenant"}
                 </Button>
               </Group>
             </Stack>
@@ -1110,11 +1344,11 @@ export default function Tenants() {
               <Alert color="blue" icon={<IconInfoCircle size={16} />}>
                 Upload an Excel file (.xlsx) with guest information. 
                 <Text size="sm" mt="xs">
-                  Required columns: firstName, lastName, email
+                  Required columns: firstName, lastName
                   <br />
-                  Optional columns: phone, address
+                  Optional columns: email, phone, address
                   <br />
-                  <Text size="xs" c="dimmed">Note: Passwords will be auto-generated and sent via email</Text>
+                  <Text size="xs" c="dimmed">Note: Passwords will be auto-generated and sent via email (if email provided)</Text>
                 </Text>
               </Alert>
 

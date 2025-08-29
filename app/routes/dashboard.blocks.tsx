@@ -19,9 +19,11 @@ import {
   Textarea,
   ActionIcon,
   Tooltip,
+  FileInput,
+  Progress,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconEdit, IconInfoCircle, IconBuilding, IconTrash, IconEye } from "@tabler/icons-react";
+import { IconPlus, IconEdit, IconInfoCircle, IconBuilding, IconTrash, IconEye, IconUpload, IconDownload, IconFileSpreadsheet } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -222,6 +224,147 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       return json({ success: "Block deleted successfully" });
+    
+    } else if (intent === "import") {
+      // Handle Excel/CSV import
+      const file = formData.get("file") as File;
+      
+      if (!file || file.size === 0) {
+        return json({ error: "Please select a valid Excel or CSV file" }, { status: 400 });
+      }
+
+      // Check file type
+      const allowedTypes = [
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv',
+        'application/csv'
+      ];
+      
+      if (!allowedTypes.includes(file.type) && !file.name.endsWith('.csv') && !file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+        return json({ error: "Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file" }, { status: 400 });
+      }
+
+      try {
+        // For this example, we'll handle CSV files. For Excel files, you'd need a library like xlsx
+        const text = await file.text();
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          return json({ error: "File must contain at least a header row and one data row" }, { status: 400 });
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        
+        // Check required headers
+        const requiredHeaders = ['name'];
+        const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
+        
+        if (missingHeaders.length > 0) {
+          return json({ 
+            error: `Missing required columns: ${missingHeaders.join(', ')}. Required: name. Optional: description, floors, location` 
+          }, { status: 400 });
+        }
+
+        const results = {
+          total: 0,
+          success: 0,
+          errors: [] as string[],
+          imported: [] as Array<{ name: string; description?: string; floors?: number; location?: string }>
+        };
+
+        // Process each data row
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim());
+          results.total++;
+
+          try {
+            const blockData: {
+              name?: string;
+              description?: string | null;
+              floors?: number | null;
+              location?: string | null;
+            } = {};
+            
+            headers.forEach((header, index) => {
+              const value = values[index] || '';
+              switch (header) {
+                case 'name':
+                  blockData.name = value;
+                  break;
+                case 'description':
+                  blockData.description = value || null;
+                  break;
+                case 'floors':
+                  blockData.floors = value ? parseInt(value) : null;
+                  break;
+                case 'location':
+                  blockData.location = value || null;
+                  break;
+              }
+            });
+
+            // Validate required fields
+            if (!blockData.name) {
+              results.errors.push(`Row ${i + 1}: Block name is required`);
+              continue;
+            }
+
+            // Check if block already exists
+            const existingBlock = await db.block.findFirst({
+              where: { name: blockData.name }
+            });
+
+            if (existingBlock) {
+              results.errors.push(`Row ${i + 1}: Block "${blockData.name}" already exists`);
+              continue;
+            }
+
+            // Create the block
+            await db.block.create({
+              data: {
+                name: blockData.name,
+                description: blockData.description || undefined,
+                floors: blockData.floors || undefined,
+                location: blockData.location || undefined,
+              }
+            });
+
+            results.success++;
+            results.imported.push({
+              name: blockData.name,
+              description: blockData.description || undefined,
+              floors: blockData.floors || undefined,
+              location: blockData.location || undefined,
+            });
+
+          } catch (error) {
+            console.error(`Error processing row ${i + 1}:`, error);
+            results.errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+
+        return json({ 
+          success: `Import completed! ${results.success} blocks imported successfully.`,
+          importResults: results
+        });
+
+      } catch (error) {
+        console.error("Import error:", error);
+        return json({ error: "Failed to process import file" }, { status: 500 });
+      }
+
+    } else if (intent === "downloadTemplate") {
+      // Generate CSV template
+      const csvContent = "name,description,floors,location\nSample Block,Sample Description,4,Sample Location";
+      
+      return new Response(csvContent, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": "attachment; filename=blocks_template.csv",
+        },
+      });
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
@@ -241,12 +384,34 @@ export default function BlocksPage() {
   const [createModalOpened, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
   const [editModalOpened, { open: openEditModal, close: closeEditModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [importModalOpened, { open: openImportModal, close: closeImportModal }] = useDisclosure(false);
   
   const [editingBlock, setEditingBlock] = useState<BlockWithStats | null>(null);
   const [deletingBlock, setDeletingBlock] = useState<BlockWithStats | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Check if we're currently submitting
   const isSubmitting = navigation.state === "submitting";
+
+  // Handle import modal close
+  const handleImportModalClose = () => {
+    if (!isUploading) {
+      setImportFile(null);
+      closeImportModal();
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!importFile) return;
+
+    setIsUploading(true);
+    // Form submission will be handled by Remix action
+    const form = event.currentTarget;
+    form.submit();
+  };
 
   // Close modals on successful action
   useEffect(() => {
@@ -284,6 +449,13 @@ export default function BlocksPage() {
           <Title order={2}>Building Blocks</Title>
           {user.role === "ADMIN" && (
             <Group>
+              <Button 
+                variant="outline"
+                leftSection={<IconUpload size={16} />} 
+                onClick={openImportModal}
+              >
+                Import
+              </Button>
               <Button 
                 variant="outline"
                 leftSection={<IconPlus size={16} />} 
@@ -582,6 +754,80 @@ export default function BlocksPage() {
               </Stack>
             </Form>
           )}
+        </Modal>
+
+        {/* Import Blocks Modal */}
+        <Modal
+          opened={importModalOpened}
+          onClose={handleImportModalClose}
+          title="Import Blocks from Excel/CSV"
+          size="lg"
+          closeOnClickOutside={!isUploading}
+          closeOnEscape={!isUploading}
+        >
+          <Stack>
+            <Alert color="blue" icon={<IconInfoCircle size={16} />}>
+              Upload an Excel (.xlsx, .xls) or CSV (.csv) file with block information.
+              <Text size="sm" mt="xs">
+                Required columns: name
+                <br />
+                Optional columns: description, floors, location
+              </Text>
+            </Alert>
+
+            <Group justify="space-between">
+              <Text size="sm" fw={500}>Download Template</Text>
+              <Form method="post" style={{ display: 'inline' }}>
+                <input type="hidden" name="intent" value="downloadTemplate" />
+                <Button 
+                  type="submit"
+                  variant="light" 
+                  size="xs"
+                  leftSection={<IconDownload size={16} />}
+                >
+                  Download CSV Template
+                </Button>
+              </Form>
+            </Group>
+
+            <Form method="post" encType="multipart/form-data" onSubmit={handleFileUpload}>
+              <input type="hidden" name="intent" value="import" />
+              <Stack gap="md">
+                <FileInput
+                  name="file"
+                  label="Select Excel or CSV file"
+                  placeholder="Click to select file"
+                  accept=".xlsx,.xls,.csv"
+                  value={importFile}
+                  onChange={setImportFile}
+                  required
+                  leftSection={<IconFileSpreadsheet size={16} />}
+                />
+
+                {isUploading && (
+                  <Progress value={100} size="lg" animated striped color="blue" />
+                )}
+
+                <Group justify="flex-end">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleImportModalClose}
+                    disabled={isUploading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    loading={isUploading}
+                    disabled={!importFile}
+                    leftSection={<IconUpload size={16} />}
+                  >
+                    {isUploading ? "Importing..." : "Import Blocks"}
+                  </Button>
+                </Group>
+              </Stack>
+            </Form>
+          </Stack>
         </Modal>
       </Stack>
     </DashboardLayout>
