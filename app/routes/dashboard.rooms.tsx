@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, useNavigate, Outlet, useLocation, useNavigation } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useNavigate, Outlet, useLocation, useNavigation, Link } from "@remix-run/react";
 import {
   Title,
   SimpleGrid,
@@ -635,9 +635,10 @@ export default function Rooms() {
             {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
               <>
                 <Button 
+                  component={Link}
+                  to="/dashboard/blocks"
                   leftSection={<IconBuilding size={16} />} 
                   variant="outline"
-                  onClick={openBlockModal}
                 >
                   Manage Blocks
                 </Button>

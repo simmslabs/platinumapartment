@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, Link, Outlet, useLocation } from "@remix-run/react";
+import { useLoaderData, useActionData, Link, Outlet, useLocation } from "@remix-run/react";
 import {
   Title,
   Table,
@@ -22,10 +22,13 @@ import {
   FileInput,
   List,
   Avatar,
+  Checkbox,
+  Progress,
+  Loader,
 } from "@mantine/core";
 import { format } from "date-fns";
 import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconEdit, IconInfoCircle, IconTrash, IconSearch, IconEye, IconUsers, IconWallet, IconTrendingUp, IconClock, IconUpload, IconDownload, IconFileSpreadsheet } from "@tabler/icons-react";
+import { IconPlus, IconEdit, IconInfoCircle, IconTrash, IconSearch, IconEye, IconUsers, IconWallet, IconTrendingUp, IconClock, IconUpload, IconDownload, IconFileSpreadsheet, IconTrashX } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -247,36 +250,86 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    if (intent === "import") {
-      // Handle Excel import
-      const file = formData.get("file") as File;
+    if (intent === "bulkDelete") {
+      const guestIds = formData.get("guestIds") as string;
       
-      if (!file) {
-        return json({ error: "No file provided" }, { status: 400 });
+      if (!guestIds) {
+        return json({ error: "No guests selected for deletion" }, { status: 400 });
+      }
+
+      const guestIdArray = guestIds.split(',').filter(id => id.trim() !== '');
+      
+      if (guestIdArray.length === 0) {
+        return json({ error: "No valid guests selected for deletion" }, { status: 400 });
       }
 
       try {
-        // Import via API route
-        const importFormData = new FormData();
-        importFormData.append("intent", "import");
-        importFormData.append("file", file);
+        // Use transaction to ensure all related data is deleted in correct order
+        await db.$transaction(async (tx) => {
+          // For each guest, delete all related data then the guest
+          for (const guestId of guestIdArray) {
+            // First, delete all payments related to this guest's bookings
+            await tx.payment.deleteMany({
+              where: {
+                booking: {
+                  userId: guestId
+                }
+              }
+            });
 
-        const response = await fetch(`${new URL(request.url).origin}/api/guests/import`, {
-          method: "POST",
-          body: importFormData,
+            // Delete all transactions related to this guest's bookings
+            await tx.transaction.deleteMany({
+              where: {
+                booking: {
+                  userId: guestId
+                }
+              }
+            });
+
+            // Delete all receipts related to this guest's bookings
+            await tx.receipt.deleteMany({
+              where: {
+                booking: {
+                  userId: guestId
+                }
+              }
+            });
+
+            // Delete all security deposits related to this guest's bookings
+            await tx.securityDeposit.deleteMany({
+              where: {
+                booking: {
+                  userId: guestId
+                }
+              }
+            });
+
+            // Delete all bookings for this guest
+            await tx.booking.deleteMany({
+              where: {
+                userId: guestId
+              }
+            });
+
+            // Finally, delete the guest
+            await tx.user.delete({
+              where: { id: guestId }
+            });
+          }
         });
 
-        const result = await response.json();
-        
-        if (response.ok) {
-          return json({ success: result.message, importResults: result.results });
-        } else {
-          return json({ error: result.error }, { status: response.status });
-        }
-      } catch (error: unknown) {
-        console.error("Import error:", error);
-        return json({ error: "Failed to import guests" }, { status: 500 });
+        return json({ 
+          success: `Successfully deleted ${guestIdArray.length} tenant${guestIdArray.length > 1 ? 's' : ''} and all related data` 
+        });
+      } catch (deleteError) {
+        console.error("Error bulk deleting guests:", deleteError);
+        return json({ error: "Failed to delete selected guests. Please try again or contact support." }, { status: 500 });
       }
+    }
+
+    if (intent === "import") {
+      // This will be handled by the new chunked upload system
+      return json({ error: "Please use the new chunked upload system" }, { status: 400 });
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
@@ -295,11 +348,24 @@ export default function Tenants() {
   const location = useLocation();
   const [importOpened, { open: openImport, close: closeImport }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [bulkDeleteModalOpened, { open: openBulkDeleteModal, close: closeBulkDeleteModal }] = useDisclosure(false);
   const [guestToDelete, setGuestToDelete] = useState<typeof guests[0] | null>(null);
+  const [selectedGuests, setSelectedGuests] = useState<Set<string>>(new Set());
   const [confirmationText, setConfirmationText] = useState("");
+  const [bulkConfirmationText, setBulkConfirmationText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'complete' | 'error'>('idle');
+  const [uploadResults, setUploadResults] = useState<{
+    total: number;
+    success: number;
+    errors: string[];
+    imported: Array<{ firstName: string; lastName: string; email: string }>;
+  } | null>(null);
 
   // Filter guests based on search query and status
   const filteredGuests = useMemo(() => {
@@ -324,6 +390,128 @@ export default function Tenants() {
     setGuestToDelete(guest);
     setConfirmationText("");
     openDeleteModal();
+  };
+
+  const handleSelectGuest = (guestId: string, checked: boolean) => {
+    const newSelected = new Set(selectedGuests);
+    if (checked) {
+      newSelected.add(guestId);
+    } else {
+      newSelected.delete(guestId);
+    }
+    setSelectedGuests(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(filteredGuests.map(guest => guest.id));
+      setSelectedGuests(allIds);
+    } else {
+      setSelectedGuests(new Set());
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedGuests.size === 0) return;
+    setBulkConfirmationText("");
+    openBulkDeleteModal();
+  };
+
+  const confirmBulkDelete = () => {
+    if (selectedGuests.size > 0 && bulkConfirmationText === "BULK DELETE") {
+      // Create a form and submit it
+      const form = document.createElement('form');
+      form.method = 'post';
+      form.style.display = 'none';
+      
+      const intentInput = document.createElement('input');
+      intentInput.type = 'hidden';
+      intentInput.name = 'intent';
+      intentInput.value = 'bulkDelete';
+      
+      const guestIdsInput = document.createElement('input');
+      guestIdsInput.type = 'hidden';
+      guestIdsInput.name = 'guestIds';
+      guestIdsInput.value = Array.from(selectedGuests).join(',');
+      
+      form.appendChild(intentInput);
+      form.appendChild(guestIdsInput);
+      document.body.appendChild(form);
+      form.submit();
+      
+      closeBulkDeleteModal();
+      setSelectedGuests(new Set());
+      setBulkConfirmationText("");
+    }
+  };
+
+  const handleChunkedUpload = async (file: File) => {
+    setIsUploading(true);
+    setUploadStatus('uploading');
+    setUploadProgress(0);
+    setProcessingProgress(0);
+    setUploadResults(null);
+
+    try {
+      // Simulate reading Excel file in chunks for upload progress
+      const chunkSize = 1024 * 1024; // 1MB chunks
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      let uploadedChunks = 0;
+
+      // Simulate chunked upload progress
+      for (let start = 0; start < file.size; start += chunkSize) {
+        uploadedChunks++;
+        setUploadProgress((uploadedChunks / totalChunks) * 100);
+        
+        // Simulate upload delay for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+
+      // Now process the file
+      setUploadStatus('processing');
+      setUploadProgress(100);
+      
+      // Send to chunked processing API
+      const formData = new FormData();
+      formData.append("intent", "import");
+      formData.append("file", file);
+
+      const response = await fetch('/api/guests/import-chunked', {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        setUploadStatus('complete');
+        setProcessingProgress(100);
+        setUploadResults(result.results);
+      } else {
+        setUploadStatus('error');
+        console.error("Import error:", result.error);
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      setUploadStatus('error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const resetUpload = () => {
+    setUploadStatus('idle');
+    setUploadProgress(0);
+    setProcessingProgress(0);
+    setUploadResults(null);
+    setImportFile(null);
+  };
+
+  const handleModalClose = () => {
+    if (!isUploading) {
+      resetUpload();
+      closeImport();
+    }
   };
 
   const confirmDelete = () => {
@@ -408,6 +596,16 @@ export default function Tenants() {
             <Title order={2}>Tenants Management</Title>
             {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
               <Group>
+                {selectedGuests.size > 0 && (
+                  <Button 
+                    leftSection={<IconTrashX size={16} />} 
+                    onClick={handleBulkDelete}
+                    color="red"
+                    variant="outline"
+                  >
+                    Delete {selectedGuests.size} Selected
+                  </Button>
+                )}
                 <Button 
                   leftSection={<IconUpload size={16} />} 
                   onClick={openImport}
@@ -549,6 +747,15 @@ export default function Tenants() {
               <Table striped highlightOnHover>
                 <Table.Thead>
                   <Table.Tr>
+                    {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+                      <Table.Th>
+                        <Checkbox
+                          checked={filteredGuests.length > 0 && selectedGuests.size === filteredGuests.length}
+                          indeterminate={selectedGuests.size > 0 && selectedGuests.size < filteredGuests.length}
+                          onChange={(event) => handleSelectAll(event.currentTarget.checked)}
+                        />
+                      </Table.Th>
+                    )}
                     <Table.Th>Tenant Information</Table.Th>
                     <Table.Th>Contact</Table.Th>
                     <Table.Th>Total Bookings</Table.Th>
@@ -562,7 +769,7 @@ export default function Tenants() {
               <Table.Tbody>
                 {filteredGuests.length === 0 ? (
                   <Table.Tr>
-                    <Table.Td colSpan={6} style={{ textAlign: "center", padding: "2rem" }}>
+                    <Table.Td colSpan={(user?.role === "ADMIN" || user?.role === "MANAGER") ? 7 : 5} style={{ textAlign: "center", padding: "2rem" }}>
                       <Stack align="center" gap="sm">
                         <IconInfoCircle size={48} color="gray" />
                         <Text c="dimmed">
@@ -576,6 +783,14 @@ export default function Tenants() {
                 ) : (
                   filteredGuests.map((guest) => (
                   <Table.Tr key={guest.id}>
+                    {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+                      <Table.Td>
+                        <Checkbox
+                          checked={selectedGuests.has(guest.id)}
+                          onChange={(event) => handleSelectGuest(guest.id, event.currentTarget.checked)}
+                        />
+                      </Table.Td>
+                    )}
                     <Table.Td>
                       <Group gap="sm">
                         {guest.profilePicture ? (
@@ -691,6 +906,106 @@ export default function Tenants() {
             </Table.ScrollContainer>
           </Card>
 
+          {/* Bulk Delete Confirmation Modal */}
+          <Modal 
+            opened={bulkDeleteModalOpened} 
+            onClose={closeBulkDeleteModal} 
+            title="Bulk Delete Tenants" 
+            size="lg"
+            centered
+          >
+            <Stack>
+              <Alert color="red" icon={<IconInfoCircle size={16} />}>
+                <Text fw={500}>⚠️ DANGER: Bulk Delete Operation!</Text>
+                <Text size="sm" mt="xs">
+                  This will permanently delete {selectedGuests.size} tenant{selectedGuests.size > 1 ? 's' : ''} and ALL associated data including:
+                </Text>
+                <List size="sm" mt="xs">
+                  <List.Item>All bookings (active and completed)</List.Item>
+                  <List.Item>All payment records and transactions</List.Item>
+                  <List.Item>All receipts and financial history</List.Item>
+                  <List.Item>All security deposits</List.Item>
+                  <List.Item>Tenant profiles and personal data</List.Item>
+                </List>
+                <Text size="sm" mt="xs" fw={500} c="red">
+                  This operation uses cascade deletion to ensure data integrity. This action cannot be undone!
+                </Text>
+              </Alert>
+
+              <Text fw={500} size="lg">
+                Selected Tenants ({selectedGuests.size}):
+              </Text>
+              
+              <Stack gap="xs" mah={200} style={{ overflow: 'auto' }}>
+                {filteredGuests
+                  .filter(guest => selectedGuests.has(guest.id))
+                  .map(guest => (
+                  <Card key={guest.id} withBorder p="xs">
+                    <Group gap="sm">
+                      {guest.profilePicture ? (
+                        <Avatar 
+                          src={guest.profilePicture} 
+                          size="sm" 
+                          radius="sm"
+                          alt={`${guest.firstName} ${guest.lastName}`}
+                        />
+                      ) : (
+                        <Avatar size="sm" radius="sm">
+                          {guest.firstName.charAt(0)}{guest.lastName.charAt(0)}
+                        </Avatar>
+                      )}
+                      <div>
+                        <Text size="sm" fw={500}>
+                          {guest.firstName} {guest.lastName}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {guest.email}
+                        </Text>
+                        <Group gap="xs">
+                          <Text size="xs" c="dimmed">
+                            {guest.bookings?.length || 0} booking(s)
+                          </Text>
+                          {guest.bookings?.some(booking => 
+                            ["CONFIRMED", "CHECKED_IN"].includes(booking.status)
+                          ) && (
+                            <Badge color="red" size="xs">
+                              Active Bookings
+                            </Badge>
+                          )}
+                        </Group>
+                      </div>
+                    </Group>
+                  </Card>
+                ))}
+              </Stack>
+
+              <Text size="sm" c="red" fw={500}>
+                To confirm bulk deletion, type: BULK DELETE
+              </Text>
+              
+              <TextInput
+                placeholder="Type 'BULK DELETE' to confirm"
+                value={bulkConfirmationText}
+                onChange={(event) => setBulkConfirmationText(event.currentTarget.value)}
+                error={bulkConfirmationText && bulkConfirmationText !== "BULK DELETE" ? "Must type exactly 'BULK DELETE'" : null}
+              />
+
+              <Group justify="flex-end">
+                <Button variant="outline" onClick={closeBulkDeleteModal}>
+                  Cancel
+                </Button>
+                <Button 
+                  color="red" 
+                  onClick={confirmBulkDelete}
+                  disabled={bulkConfirmationText !== "BULK DELETE"}
+                  leftSection={<IconTrashX size={16} />}
+                >
+                  Delete {selectedGuests.size} Tenant{selectedGuests.size > 1 ? 's' : ''}
+                </Button>
+              </Group>
+            </Stack>
+          </Modal>
+
           {/* Delete Confirmation Modal */}
           <Modal 
             opened={deleteModalOpened} 
@@ -782,7 +1097,15 @@ export default function Tenants() {
           </Modal>
 
           {/* Import Tenants Modal */}
-          <Modal opened={importOpened} onClose={closeImport} title="Import Tenants from Excel" size="lg">
+          <Modal 
+            opened={importOpened} 
+            onClose={handleModalClose}
+            title="Import Tenants from Excel" 
+            size="lg"
+            closeOnClickOutside={!isUploading}
+            closeOnEscape={!isUploading}
+            trapFocus={!isUploading}
+          >
             <Stack>
               <Alert color="blue" icon={<IconInfoCircle size={16} />}>
                 Upload an Excel file (.xlsx) with guest information. 
@@ -807,62 +1130,144 @@ export default function Tenants() {
                 </Button>
               </Group>
 
-              <Form method="post" encType="multipart/form-data">
-                <input type="hidden" name="intent" value="import" />
-                <Stack>
-                  <FileInput
-                    label="Select Excel File"
-                    placeholder="Choose .xlsx file"
-                    accept=".xlsx,.xls"
-                    name="file"
-                    leftSection={<IconFileSpreadsheet size={16} />}
-                    onChange={setImportFile}
-                    required
-                  />
+              <Stack>
+                <FileInput
+                  label="Select Excel File"
+                  placeholder="Choose .xlsx file"
+                  accept=".xlsx,.xls"
+                  leftSection={<IconFileSpreadsheet size={16} />}
+                  onChange={setImportFile}
+                  disabled={isUploading}
+                  value={importFile}
+                />
 
-                  {actionData && "importResults" in actionData && (
-                    <Card withBorder p="md">
-                      <Stack gap="xs">
-                        <Text fw={500} c="green">Import Results:</Text>
-                        <Text size="sm">
-                          ✅ Successfully imported: {actionData.importResults.success} guests
-                        </Text>
-                        <Text size="sm">
-                          📊 Total processed: {actionData.importResults.total} rows
-                        </Text>
-                        {actionData.importResults.errors.length > 0 && (
-                          <>
-                            <Text size="sm" c="red">
-                              ❌ Errors: {actionData.importResults.errors.length}
-                            </Text>
-                            <List size="sm" spacing="xs">
-                              {actionData.importResults.errors.slice(0, 5).map((error: string, index: number) => (
-                                <List.Item key={index}>{error}</List.Item>
-                              ))}
-                              {actionData.importResults.errors.length > 5 && (
-                                <List.Item>... and {actionData.importResults.errors.length - 5} more errors</List.Item>
-                              )}
-                            </List>
-                          </>
-                        )}
-                      </Stack>
-                    </Card>
-                  )}
+                {/* Upload Progress */}
+                {uploadStatus !== 'idle' && (
+                  <Card withBorder p="md">
+                    <Stack gap="sm">
+                      {importFile && (
+                        <Group justify="space-between">
+                          <Text size="sm" fw={500}>File: {importFile.name}</Text>
+                          <Text size="sm" c="dimmed">
+                            {(importFile.size / 1024 / 1024).toFixed(2)} MB
+                          </Text>
+                        </Group>
+                      )}
 
-                  <Group justify="flex-end">
-                    <Button variant="outline" onClick={closeImport}>
-                      Cancel
-                    </Button>
+                      {uploadStatus === 'uploading' && (
+                        <div>
+                          <Group justify="space-between" mb="xs">
+                            <Text size="sm" fw={500}>📤 Uploading file...</Text>
+                            <Text size="sm" c="dimmed">{Math.round(uploadProgress)}%</Text>
+                          </Group>
+                          <Progress value={uploadProgress} size="lg" animated color="blue" />
+                        </div>
+                      )}
+
+                      {uploadStatus === 'processing' && (
+                        <div>
+                          <Group justify="space-between" mb="xs">
+                            <Group gap="xs">
+                              <Loader size="sm" />
+                              <Text size="sm" fw={500}>⚙️ Processing Excel data...</Text>
+                            </Group>
+                            <Text size="sm" c="dimmed">Importing guests</Text>
+                          </Group>
+                          <Progress value={100} size="lg" animated striped color="orange" />
+                          <Text size="xs" c="dimmed" mt="xs">
+                            Reading Excel file and creating tenant accounts...
+                          </Text>
+                        </div>
+                      )}
+
+                      {uploadStatus === 'complete' && uploadResults && (
+                        <Alert color="green" icon={<IconInfoCircle size={16} />}>
+                          <Text fw={500} c="green">🎉 Import Completed Successfully!</Text>
+                          <Stack gap="xs" mt="xs">
+                            <Group>
+                              <Text size="sm">
+                                ✅ Successfully imported: <Text span fw={700}>{uploadResults.success}</Text> guests
+                              </Text>
+                            </Group>
+                            <Group>
+                              <Text size="sm">
+                                📊 Total processed: <Text span fw={700}>{uploadResults.total}</Text> rows
+                              </Text>
+                            </Group>
+                            {uploadResults.errors.length > 0 && (
+                              <>
+                                <Text size="sm" c="red">
+                                  ❌ Errors: <Text span fw={700}>{uploadResults.errors.length}</Text>
+                                </Text>
+                                <List size="sm" spacing="xs">
+                                  {uploadResults.errors.slice(0, 5).map((error: string, index: number) => (
+                                    <List.Item key={index}>{error}</List.Item>
+                                  ))}
+                                  {uploadResults.errors.length > 5 && (
+                                    <List.Item>... and {uploadResults.errors.length - 5} more errors</List.Item>
+                                  )}
+                                </List>
+                              </>
+                            )}
+                          </Stack>
+                        </Alert>
+                      )}
+
+                      {uploadStatus === 'error' && (
+                        <Alert color="red" icon={<IconInfoCircle size={16} />}>
+                          <Text fw={500} c="red">💥 Upload Failed</Text>
+                          <Text size="sm" mt="xs">
+                            There was an error processing your file. Please check the file format and try again.
+                          </Text>
+                        </Alert>
+                      )}
+                    </Stack>
+                  </Card>
+                )}
+
+                <Group justify="flex-end">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      resetUpload();
+                      closeImport();
+                    }}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? 'Uploading...' : 'Cancel'}
+                  </Button>
+                  
+                  {uploadStatus === 'complete' && (
                     <Button 
-                      type="submit" 
-                      disabled={!importFile}
+                      onClick={resetUpload}
+                      leftSection={<IconUpload size={16} />}
+                    >
+                      Upload Another File
+                    </Button>
+                  )}
+                  
+                  {uploadStatus === 'idle' && (
+                    <Button 
+                      onClick={() => importFile && handleChunkedUpload(importFile)}
+                      disabled={!importFile || isUploading}
                       leftSection={<IconUpload size={16} />}
                     >
                       Import Tenants
                     </Button>
-                  </Group>
-                </Stack>
-              </Form>
+                  )}
+                  
+                  {uploadStatus === 'error' && (
+                    <Button 
+                      onClick={() => importFile && handleChunkedUpload(importFile)}
+                      disabled={!importFile}
+                      leftSection={<IconUpload size={16} />}
+                      color="red"
+                    >
+                      Retry Upload
+                    </Button>
+                  )}
+                </Group>
+              </Stack>
             </Stack>
           </Modal>
         </Stack>
