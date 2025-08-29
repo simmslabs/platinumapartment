@@ -10,6 +10,7 @@ import {
   TextInput,
   NumberInput,
   Select,
+  MultiSelect,
   Textarea,
   Alert,
   Paper,
@@ -47,7 +48,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { displayName: "asc" },
   });
 
-  return json({ user, blocks, roomTypes });
+  // Get all existing assets that are not assigned to a room
+  const availableAssets = await db.roomAsset.findMany({
+    where: {
+      roomId: null, // Only unassigned assets
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return json({ user, blocks, roomTypes, availableAssets });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -113,6 +122,17 @@ export async function action({ request }: ActionFunctionArgs) {
     assetIndex++;
   }
 
+  // Parse selected existing assets
+  const selectedAssetIds: string[] = [];
+  let selectedAssetIndex = 0;
+  while (formData.has(`selectedAssets[${selectedAssetIndex}]`)) {
+    const assetId = formData.get(`selectedAssets[${selectedAssetIndex}]`) as string;
+    if (assetId) {
+      selectedAssetIds.push(assetId);
+    }
+    selectedAssetIndex++;
+  }
+
   try {
     // Check if block exists, if not create it
     let blockRecord = await db.block.findUnique({
@@ -145,13 +165,28 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      // Create assets if any
+      // Create new assets if any
       if (assetsData.length > 0) {
         await tx.roomAsset.createMany({
           data: assetsData.map(asset => ({
             ...asset,
             roomId: newRoom.id,
           })),
+        });
+      }
+
+      // Assign selected existing assets to this room
+      if (selectedAssetIds.length > 0) {
+        await tx.roomAsset.updateMany({
+          where: {
+            id: {
+              in: selectedAssetIds,
+            },
+            roomId: null, // Only update unassigned assets
+          },
+          data: {
+            roomId: newRoom.id,
+          },
         });
       }
 
@@ -173,7 +208,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AddRoom() {
-  const { user, blocks, roomTypes } = useLoaderData<typeof loader>();
+  const { user, blocks, roomTypes, availableAssets } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
@@ -187,6 +222,9 @@ export default function AddRoom() {
     description: string;
     serialNumber: string;
   }>>([]);
+
+  // State for selected existing assets to assign to this room
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
 
   // Convert room types to select data format
   const roomTypeSelectData = roomTypes.map(type => ({
@@ -365,9 +403,28 @@ export default function AddRoom() {
               {/* Room Assets Section */}
               <Divider label="Room Assets (Optional)" labelPosition="center" mt="xl" my="lg" />
 
+              {/* Select Existing Assets */}
+              {availableAssets.length > 0 && (
+                <MultiSelect
+                  label="Assign Existing Assets"
+                  description="Select from unassigned assets to add to this room"
+                  placeholder="Choose existing assets..."
+                  data={availableAssets.map(asset => ({
+                    value: asset.id,
+                    label: `${asset.name} (${asset.category}) - ${asset.condition}`,
+                  }))}
+                  value={selectedAssetIds}
+                  onChange={setSelectedAssetIds}
+                  searchable
+                  clearable
+                  mb="md"
+                />
+              )}
+
+              {/* Create New Assets */}
               <Group justify="space-between" align="center" mb="md">
                 <Text size="sm" c="dimmed">
-                  Add assets that will be included with this room
+                  Or create new assets for this room
                 </Text>
                 <Button
                   size="compact-sm"
@@ -375,7 +432,7 @@ export default function AddRoom() {
                   onClick={addAsset}
                   variant="light"
                 >
-                  Add Asset
+                  Add New Asset
                 </Button>
               </Group>
 
@@ -457,6 +514,16 @@ export default function AddRoom() {
                   ))}
                 </Stack>
               )}
+
+              {/* Hidden inputs for selected existing assets */}
+              {selectedAssetIds.map((assetId, index) => (
+                <input 
+                  key={assetId}
+                  type="hidden" 
+                  name={`selectedAssets[${index}]`} 
+                  value={assetId} 
+                />
+              ))}
 
               <Group justify="flex-end">
                 <Button 

@@ -24,7 +24,7 @@ import {
   IconPlus,
   IconAlertTriangle,
   IconCalendar,
-  IconWrench,
+  IconTools,
   IconEye,
 } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
@@ -162,13 +162,23 @@ export default function AssetsManagement() {
               <Title order={2}>Assets Management</Title>
               <Text c="dimmed">Manage and track all room assets and equipment</Text>
             </div>
-            <Button
-              component={Link}
-              to="/dashboard/rooms"
-              leftSection={<IconPlus size={16} />}
-            >
-              Add Asset to Room
-            </Button>
+            <Group gap="sm">
+              <Button
+                component={Link}
+                to="/dashboard/assets/new"
+                leftSection={<IconPlus size={16} />}
+              >
+                Add Asset
+              </Button>
+              <Button
+                component={Link}
+                to="/dashboard/assets/bulk"
+                variant="light"
+                leftSection={<IconPlus size={16} />}
+              >
+                Bulk Add
+              </Button>
+            </Group>
           </Group>
 
           {/* Statistics Overview */}
@@ -355,7 +365,7 @@ export default function AssetsManagement() {
                         color="orange"
                         size="sm"
                       >
-                        <IconWrench size={14} />
+                        <IconTools size={14} />
                       </ActionIcon>
                     </Tooltip>
                     

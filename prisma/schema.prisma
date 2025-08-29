@@ -147,7 +147,7 @@ enum PricingPeriod {
 // Asset Management
 model RoomAsset {
   id          String        @id @default(cuid())
-  roomId      String
+  roomId      String?       // Made optional to allow unassigned assets
   name        String        // Asset name (e.g., "Bed", "TV", "Chair", "Air Conditioner")
   category    AssetCategory // Category of the asset
   quantity    Int           @default(1) // Number of this asset in the room
@@ -162,7 +162,7 @@ model RoomAsset {
   updatedAt   DateTime      @updatedAt
 
   // Relations
-  room        Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  room        Room?           @relation(fields: [roomId], references: [id], onDelete: SetNull)
   maintenance MaintenanceLog[] // Maintenance tasks for this asset
 
   // Indexes for better performance
