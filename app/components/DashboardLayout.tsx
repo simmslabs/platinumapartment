@@ -28,6 +28,7 @@ import {
   IconChartBar,
   IconWallet,
   IconMenu2,
+  IconPackage,
 } from "@tabler/icons-react";
 import type { User } from "@prisma/client";
 import { useState, useEffect, useCallback } from "react";
@@ -86,6 +87,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
     // { icon: IconBuildingStore, label: "Blocks", link: "/dashboard/blocks", isActive: location.pathname.includes("/blocks") },
     { icon: IconClockHour2, label: "Maintenance", link: "/dashboard/maintenance", isActive: location.pathname.includes("/maintenance") },
     { icon: IconPlayerPlay, label: "Services", link: "/dashboard/services", isActive: location.pathname.includes("/services") },
+    { icon: IconPackage, label: "Assets", link: "/dashboard/assets", isActive: location.pathname.includes("/assets") },
   ];
 
   const financialItems = [
