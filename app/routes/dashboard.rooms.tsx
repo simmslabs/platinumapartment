@@ -40,9 +40,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       type: true, // Include room type relationship
       blockRelation: true,
       assets: {
+        include: {
+          asset: true, // Include the actual asset details
+        },
         orderBy: [
-          { category: "asc" },
-          { name: "asc" }
+          { assignedAt: "asc" }, // Order by when asset was assigned
         ]
       },
     },
@@ -985,15 +987,15 @@ export default function Rooms() {
 
               {selectedRoom.assets && selectedRoom.assets.length > 0 ? (
                 <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                  {selectedRoom.assets.map((asset) => (
-                    <Card key={asset.id} withBorder>
+                  {selectedRoom.assets.map((roomAsset) => (
+                    <Card key={roomAsset.id} withBorder>
                       <Group justify="space-between" mb="xs">
-                        <Text fw={500}>{asset.name}</Text>
+                        <Text fw={500}>{roomAsset.asset.name}</Text>
                         <Badge 
-                          color={getAssetConditionColor(asset.condition)}
+                          color={getAssetConditionColor(roomAsset.condition)}
                           size="sm"
                         >
-                          {asset.condition}
+                          {roomAsset.condition}
                         </Badge>
                       </Group>
                       
@@ -1001,38 +1003,38 @@ export default function Rooms() {
                         <Group gap="xs">
                           <Text size="sm" c="dimmed">Category:</Text>
                           <Badge variant="light" size="xs">
-                            {asset.category.replace('_', ' ')}
+                            {roomAsset.asset.category.replace('_', ' ')}
                           </Badge>
                         </Group>
                         
                         <Group gap="xs">
                           <Text size="sm" c="dimmed">Quantity:</Text>
-                          <Text size="sm">{asset.quantity}</Text>
+                          <Text size="sm">{roomAsset.quantity}</Text>
                         </Group>
                         
-                        {asset.description && (
-                          <Text size="sm" c="dimmed">{asset.description}</Text>
+                        {roomAsset.asset.description && (
+                          <Text size="sm" c="dimmed">{roomAsset.asset.description}</Text>
                         )}
                         
-                        {asset.serialNumber && (
+                        {roomAsset.asset.serialNumber && (
                           <Group gap="xs">
                             <Text size="sm" c="dimmed">Serial:</Text>
-                            <Text size="sm" ff="monospace">{asset.serialNumber}</Text>
+                            <Text size="sm" ff="monospace">{roomAsset.asset.serialNumber}</Text>
                           </Group>
                         )}
                         
-                        {asset.lastInspected && (
+                        {roomAsset.asset.lastInspected && (
                           <Group gap="xs">
                             <Text size="sm" c="dimmed">Last Inspected:</Text>
                             <Text size="sm">
-                              {new Date(asset.lastInspected).toLocaleDateString()}
+                              {new Date(roomAsset.asset.lastInspected).toLocaleDateString()}
                             </Text>
                           </Group>
                         )}
                         
-                        {asset.notes && (
+                        {roomAsset.notes && (
                           <Text size="xs" c="orange" style={{ fontStyle: 'italic' }}>
-                            Note: {asset.notes}
+                            Room Note: {roomAsset.notes}
                           </Text>
                         )}
                       </Stack>

@@ -1,6 +1,6 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { useLoaderData, Link, useNavigate } from "@remix-run/react";
+import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
+import { useLoaderData, Link, useNavigate, Outlet, useLocation, Form, useActionData } from "@remix-run/react";
 import {
   Title,
   SimpleGrid,
@@ -18,7 +18,11 @@ import {
   Progress,
   Container,
   Grid,
+  Modal,
+  Alert,
+  TextInput,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import {
   IconArrowLeft,
   IconUsers,
@@ -28,11 +32,14 @@ import {
   IconBed,
   IconClock,
   IconPlus,
+  IconTrash,
+  IconAlertTriangle,
 } from "@tabler/icons-react";
-import  DashboardLayout   from "~/components/DashboardLayout";
+import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import { subDays, subMonths, format, differenceInDays } from "date-fns";
+import { useState } from "react";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const roomNumber = data?.room?.number || "Unknown";
@@ -63,9 +70,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       blockRelation: true,
       assets: {
+        include: {
+          asset: true, // Include the actual asset details
+        },
         orderBy: [
-          { category: "asc" },
-          { name: "asc" }
+          { assignedAt: "asc" }, // Order by when asset was assigned
         ]
       },
       bookings: {
@@ -198,9 +207,93 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
+export async function action({ request, params }: ActionFunctionArgs) {
+  await requireUserId(request);
+  const { roomId } = params;
+  const formData = await request.formData();
+  const intent = formData.get("intent") as string;
+
+  if (!roomId) {
+    throw new Response("Room ID required", { status: 400 });
+  }
+
+  try {
+    if (intent === "force-delete") {
+      const confirmation = formData.get("confirm") as string;
+      
+      if (confirmation !== "DELETE") {
+        return json({ error: "Confirmation text must be 'DELETE'" }, { status: 400 });
+      }
+
+      // Check if room exists
+      const room = await db.room.findUnique({
+        where: { id: roomId },
+        include: {
+          bookings: { where: { status: { in: ["CONFIRMED", "CHECKED_IN"] } } },
+          assets: true,
+          maintenance: { where: { status: { in: ["PENDING", "IN_PROGRESS"] } } },
+        },
+      });
+
+      if (!room) {
+        return json({ error: "Room not found" }, { status: 404 });
+      }
+
+      // Force delete: Remove all related data
+      await db.$transaction(async (tx) => {
+        // Delete room assets first
+        await tx.roomAsset.deleteMany({
+          where: { roomId },
+        });
+
+        // Delete maintenance logs
+        await tx.maintenanceLog.deleteMany({
+          where: { roomId },
+        });
+
+        // Delete bookings and related data
+        const bookings = await tx.booking.findMany({
+          where: { roomId },
+          select: { id: true },
+        });
+
+        if (bookings.length > 0) {
+          const bookingIds = bookings.map(b => b.id);
+          
+          // Delete payments
+          await tx.payment.deleteMany({
+            where: { bookingId: { in: bookingIds } },
+          });
+
+          // Delete bookings
+          await tx.booking.deleteMany({
+            where: { id: { in: bookingIds } },
+          });
+        }
+
+        // Finally delete the room
+        await tx.room.delete({
+          where: { id: roomId },
+        });
+      });
+
+      return redirect("/dashboard/rooms");
+    }
+
+    return json({ error: "Invalid action" }, { status: 400 });
+  } catch (error) {
+    console.error("Force delete room error:", error);
+    return json({ error: "Failed to delete room. Please try again." }, { status: 500 });
+  }
+}
+
 export default function RoomDetails() {
   const { user, room, analytics } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const location = useLocation();
   const navigate = useNavigate();
+  const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [confirmText, setConfirmText] = useState("");
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -237,6 +330,8 @@ export default function RoomDetails() {
     return `₵${price.toLocaleString()}/${label}`;
   };
 
+  if (location.pathname !== `/dashboard/rooms/${room.id}`) return <Outlet />
+
   return (
     <DashboardLayout user={user}>
       <Container size="xl">
@@ -257,9 +352,22 @@ export default function RoomDetails() {
                 </Text>
               </div>
             </Group>
-            <Badge size="lg" color={getStatusColor(room.status)}>
-              {room.status.replace("_", " ")}
-            </Badge>
+            <Group>
+              <Badge size="lg" color={getStatusColor(room.status)}>
+                {room.status.replace("_", " ")}
+              </Badge>
+              {user?.role === "ADMIN" && (
+                <Button
+                  variant="filled"
+                  color="red"
+                  size="sm"
+                  leftSection={<IconTrash size={16} />}
+                  onClick={openDeleteModal}
+                >
+                  Force Delete
+                </Button>
+              )}
+            </Group>
           </Group>
 
           <Grid gutter="md" >
@@ -558,23 +666,23 @@ export default function RoomDetails() {
 
             {room.assets && room.assets.length > 0 ? (
               <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }}>
-                {room.assets.map((asset) => (
-                  <Card key={asset.id} withBorder p="sm">
+                {room.assets.map((roomAsset) => (
+                  <Card key={roomAsset.id} withBorder p="sm">
                     <Group justify="space-between" mb="xs">
-                      <Text fw={500} size="sm">{asset.name}</Text>
+                      <Text fw={500} size="sm">{roomAsset.asset.name}</Text>
                       <Badge
                         color={
-                          asset.condition === 'EXCELLENT' ? 'green' :
-                            asset.condition === 'GOOD' ? 'blue' :
-                              asset.condition === 'FAIR' ? 'yellow' :
-                                asset.condition === 'POOR' ? 'orange' :
-                                  asset.condition === 'DAMAGED' ? 'red' :
-                                    asset.condition === 'BROKEN' ? 'red' :
+                          roomAsset.condition === 'EXCELLENT' ? 'green' :
+                            roomAsset.condition === 'GOOD' ? 'blue' :
+                              roomAsset.condition === 'FAIR' ? 'yellow' :
+                                roomAsset.condition === 'POOR' ? 'orange' :
+                                  roomAsset.condition === 'DAMAGED' ? 'red' :
+                                    roomAsset.condition === 'BROKEN' ? 'red' :
                                       'gray'
                         }
                         size="xs"
                       >
-                        {asset.condition}
+                        {roomAsset.condition}
                       </Badge>
                     </Group>
 
@@ -582,31 +690,31 @@ export default function RoomDetails() {
                       <Group gap="xs">
                         <Text size="xs" c="dimmed">Category:</Text>
                         <Badge variant="light" size="xs">
-                          {asset.category.replace('_', ' ')}
+                          {roomAsset.asset.category.replace('_', ' ')}
                         </Badge>
                       </Group>
 
                       <Group gap="xs">
                         <Text size="xs" c="dimmed">Qty:</Text>
-                        <Text size="xs">{asset.quantity}</Text>
+                        <Text size="xs">{roomAsset.quantity}</Text>
                       </Group>
 
-                      {asset.serialNumber && (
+                      {roomAsset.asset.serialNumber && (
                         <Group gap="xs">
                           <Text size="xs" c="dimmed">Serial:</Text>
-                          <Text size="xs" ff="monospace">{asset.serialNumber}</Text>
+                          <Text size="xs" ff="monospace">{roomAsset.asset.serialNumber}</Text>
                         </Group>
                       )}
 
-                      {asset.lastInspected && (
+                      {roomAsset.asset.lastInspected && (
                         <Text size="xs" c="dimmed">
-                          Inspected: {new Date(asset.lastInspected).toLocaleDateString()}
+                          Inspected: {new Date(roomAsset.asset.lastInspected).toLocaleDateString()}
                         </Text>
                       )}
 
-                      {asset.notes && (
+                      {roomAsset.notes && (
                         <Text size="xs" c="orange" style={{ fontStyle: 'italic' }}>
-                          {asset.notes}
+                          Room Note: {roomAsset.notes}
                         </Text>
                       )}
                     </Stack>
@@ -632,6 +740,62 @@ export default function RoomDetails() {
           </Card>
         </Stack>
       </Container>
+
+      {/* Force Delete Modal */}
+      <Modal
+        opened={deleteModalOpened}
+        onClose={closeDeleteModal}
+        title="Force Delete Room"
+        size="md"
+        centered
+      >
+        <Stack>
+          {actionData?.error && (
+            <Alert color="red" icon={<IconAlertTriangle size={16} />}>
+              {actionData.error}
+            </Alert>
+          )}
+          
+          <Alert color="orange" icon={<IconAlertTriangle size={16} />}>
+            <strong>Warning:</strong> This action cannot be undone. This will permanently delete:
+            <Text component="ul" mt="xs" ml="md">
+              <li>Room {room.number} and all its details</li>
+              <li>All associated bookings and payments</li>
+              <li>All maintenance logs</li>
+              <li>All room assets</li>
+            </Text>
+          </Alert>
+
+          <Form method="post" onSubmit={() => setConfirmText("")}>
+            <input type="hidden" name="intent" value="force-delete" />
+            <Stack>
+              <Text size="sm" fw={500}>
+                Type <strong>DELETE</strong> to confirm:
+              </Text>
+              <TextInput
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                name="confirm"
+                placeholder="Type DELETE here"
+                required
+              />
+              <Group justify="flex-end">
+                <Button variant="default" onClick={closeDeleteModal}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  color="red"
+                  disabled={confirmText !== "DELETE"}
+                  leftSection={<IconTrash size={16} />}
+                >
+                  Delete Room
+                </Button>
+              </Group>
+            </Stack>
+          </Form>
+        </Stack>
+      </Modal>
     </DashboardLayout>
   );
 }

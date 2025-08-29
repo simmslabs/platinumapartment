@@ -8,7 +8,6 @@ import {
   Stack,
   Group,
   TextInput,
-  NumberInput,
   Select,
   Textarea,
   Alert,
@@ -21,7 +20,7 @@ import { IconArrowLeft, IconDeviceFloppy, IconAlertCircle, IconPackage } from "@
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { AssetCategory, AssetCondition } from "@prisma/client";
+import type { AssetCategory } from "@prisma/client";
 
 export const meta: MetaFunction = () => {
   return [
@@ -34,35 +33,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
 
-  // Get all rooms for the dropdown
-  const rooms = await db.room.findMany({
-    include: {
-      type: {
-        select: {
-          displayName: true,
-          name: true,
-        },
-      },
-      blockRelation: true,
-    },
-    orderBy: [
-      { block: "asc" },
-      { number: "asc" },
-    ],
-  });
-
-  return json({ user, rooms });
+  return json({ user });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireUserId(request);
   
   const formData = await request.formData();
-  const roomId = formData.get("roomId") as string;
   const name = formData.get("name") as string;
   const category = formData.get("category") as AssetCategory;
-  const condition = formData.get("condition") as AssetCondition;
-  const quantity = parseInt(formData.get("quantity") as string);
   const description = formData.get("description") as string || null;
   const serialNumber = formData.get("serialNumber") as string || null;
   const purchaseDate = formData.get("purchaseDate") as string || null;
@@ -70,41 +49,27 @@ export async function action({ request }: ActionFunctionArgs) {
   const notes = formData.get("notes") as string || null;
 
   // Validation
-  if (!roomId || !name || !category || !condition || isNaN(quantity) || quantity < 1) {
+  if (!name || !category) {
     return json({
-      error: "Please fill in all required fields with valid values.",
-    }, { status: 400 });
-  }
-
-  // Verify room exists
-  const room = await db.room.findUnique({
-    where: { id: roomId },
-  });
-
-  if (!room) {
-    return json({
-      error: "Selected room not found.",
+      error: "Please fill in all required fields.",
     }, { status: 400 });
   }
 
   try {
-    const asset = await db.roomAsset.create({
+    const asset = await db.asset.create({
       data: {
-        roomId,
         name,
         category,
-        condition,
-        quantity,
         description,
         serialNumber,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
         warrantyExpiry: warrantyExpiry ? new Date(warrantyExpiry) : null,
         notes,
-        lastInspected: condition === "EXCELLENT" || condition === "GOOD" ? new Date() : null,
+        lastInspected: new Date(), // Set inspection date on creation
       },
     });
 
-    return redirect(`/dashboard/assets/${asset.id}?created=true`);
+    return redirect(`/dashboard/assets?created=${asset.id}`);
   } catch (error) {
     console.error("Error creating asset:", error);
     return json({
@@ -114,16 +79,9 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function NewAsset() {
-  const { user, rooms } = useLoaderData<typeof loader>();
+  const { user } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
-
-  // Format rooms for the select dropdown
-  const roomOptions = rooms.map((room) => ({
-    value: room.id,
-    label: `${room.number} - ${room.type.displayName} (${room.blockRelation?.name || room.block})`,
-    group: room.blockRelation?.name || room.block,
-  }));
 
   const categoryOptions = [
     { value: "FURNITURE", label: "🪑 Furniture" },
@@ -136,16 +94,6 @@ export default function NewAsset() {
     { value: "DECORATION", label: "🖼️ Decoration" },
     { value: "CLEANING", label: "🧹 Cleaning" },
     { value: "OTHER", label: "📦 Other" },
-  ];
-
-  const conditionOptions = [
-    { value: "EXCELLENT", label: "Excellent", description: "Like new, perfect condition" },
-    { value: "GOOD", label: "Good", description: "Good condition, minor wear" },
-    { value: "FAIR", label: "Fair", description: "Shows wear but functional" },
-    { value: "POOR", label: "Poor", description: "Significant wear, needs attention" },
-    { value: "DAMAGED", label: "Damaged", description: "Damaged but repairable" },
-    { value: "BROKEN", label: "Broken", description: "Not functional, needs replacement" },
-    { value: "MISSING", label: "Missing", description: "Asset is missing/lost" },
   ];
 
   return (
@@ -163,12 +111,15 @@ export default function NewAsset() {
                 Back to Assets
               </Button>
               <div>
-                <Title order={2}>Add New Asset</Title>
+                <Title order={2}>Create New Asset</Title>
+                <Text c="dimmed" size="sm">
+                  Create a general asset that can be assigned to rooms later
+                </Text>
                 <Breadcrumbs>
                   <Anchor component="button" onClick={() => navigate("/dashboard/assets")}>
                     Assets
                   </Anchor>
-                  <Text>New Asset</Text>
+                  <Text>Create Asset</Text>
                 </Breadcrumbs>
               </div>
             </Group>
@@ -186,17 +137,6 @@ export default function NewAsset() {
           <Paper withBorder p="lg">
             <Form method="post">
               <Stack gap="md">
-                {/* Room Selection */}
-                <Select
-                  label="Room"
-                  name="roomId"
-                  placeholder="Select a room for this asset"
-                  data={roomOptions}
-                  required
-                  searchable
-                  description="Choose which room this asset belongs to"
-                />
-
                 {/* Basic Asset Information */}
                 <Group gap="md" grow>
                   <TextInput
@@ -214,27 +154,6 @@ export default function NewAsset() {
                     data={categoryOptions}
                     required
                     description="Choose the most appropriate category"
-                  />
-                </Group>
-
-                <Group gap="md" grow>
-                  <Select
-                    label="Condition"
-                    name="condition"
-                    placeholder="Select current condition"
-                    data={conditionOptions}
-                    required
-                    description="Assess the current state of the asset"
-                  />
-
-                  <NumberInput
-                    label="Quantity"
-                    name="quantity"
-                    placeholder="1"
-                    min={1}
-                    defaultValue={1}
-                    required
-                    description="How many of this asset are there"
                   />
                 </Group>
 

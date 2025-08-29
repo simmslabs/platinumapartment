@@ -53,8 +53,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       asset: {
         select: { 
           name: true, 
-          category: true, 
-          condition: true 
+          category: true,
+          description: true,
         },
       },
     },
@@ -337,13 +337,15 @@ export default function Maintenance() {
                           {log.asset.name}
                         </Text>
                         <Badge size="xs" variant="light" color={
-                          log.asset.condition === "EXCELLENT" ? "green" :
-                          log.asset.condition === "GOOD" ? "blue" :
-                          log.asset.condition === "FAIR" ? "yellow" :
-                          log.asset.condition === "POOR" ? "orange" :
-                          log.asset.condition === "DAMAGED" ? "red" :
-                          log.asset.condition === "BROKEN" ? "red" :
-                          log.asset.condition === "MISSING" ? "gray" : "gray"
+                          log.asset.category === "ELECTRONICS" ? "cyan" :
+                          log.asset.category === "FURNITURE" ? "brown" :
+                          log.asset.category === "BATHROOM" ? "blue" :
+                          log.asset.category === "KITCHEN" ? "orange" :
+                          log.asset.category === "BEDDING" ? "pink" :
+                          log.asset.category === "LIGHTING" ? "yellow" :
+                          log.asset.category === "SAFETY" ? "red" :
+                          log.asset.category === "DECORATION" ? "grape" :
+                          log.asset.category === "CLEANING" ? "green" : "gray"
                         }>
                           {log.asset.category.replace("_", " ")}
                         </Badge>

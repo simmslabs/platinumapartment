@@ -53,9 +53,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: {
       id: true,
       roomId: true,
-      name: true,
-      category: true,
       condition: true,
+      quantity: true,
+      asset: {
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          description: true,
+        }
+      },
       room: {
         select: {
           number: true,
@@ -65,7 +72,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
     orderBy: [
       { room: { number: "asc" } },
-      { name: "asc" }
+      { asset: { name: "asc" } }
     ],
   });
 
@@ -74,6 +81,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireUserId(request);
+  const user = await getUser(request);
   const formData = await request.formData();
 
   try {
@@ -82,7 +90,6 @@ export async function action({ request }: ActionFunctionArgs) {
     const type = formData.get("type") as string;
     const description = formData.get("description") as string;
     const priority = formData.get("priority") as string;
-    const reportedBy = formData.get("reportedBy") as string;
     const assignedTo = formData.get("assignedTo") as string;
     const cost = formData.get("cost") ? parseFloat(formData.get("cost") as string) : null;
 
@@ -97,7 +104,7 @@ export async function action({ request }: ActionFunctionArgs) {
           type: type as MaintenanceType,
           description,
           priority: priority as Priority,
-          reportedBy: reportedBy || null,
+          reportedBy: `${user?.firstName} ${user?.lastName}` || "Unknown Staff",
           assignedTo: assignedTo || null,
           cost,
           status: "PENDING",
@@ -125,7 +132,7 @@ export default function NewMaintenanceTask() {
 
   // Filter assets based on selected room
   const filteredAssets = selectedRoomId 
-    ? assets.filter(asset => asset.roomId === selectedRoomId)
+    ? assets.filter(roomAsset => roomAsset.roomId === selectedRoomId)
     : [];
 
   const breadcrumbItems = [
@@ -194,10 +201,10 @@ export default function NewMaintenanceTask() {
                   label="Asset (Optional)"
                   placeholder="Select specific asset or leave blank for general room maintenance"
                   name="assetId"
-                  data={filteredAssets.map(asset => ({
-                    value: asset.id,
-                    label: `${asset.name} (${asset.category.replace("_", " ")})`,
-                    disabled: asset.condition === "BROKEN" || asset.condition === "MISSING"
+                  data={filteredAssets.map(roomAsset => ({
+                    value: roomAsset.asset.id,
+                    label: `${roomAsset.asset.name} (${roomAsset.asset.category.replace("_", " ")})`,
+                    disabled: roomAsset.condition === "BROKEN" || roomAsset.condition === "MISSING"
                   }))}
                   searchable
                   clearable
@@ -246,8 +253,10 @@ export default function NewMaintenanceTask() {
               <Group grow>
                 <TextInput
                   label="Reported By"
-                  placeholder="Staff member name"
+                  value={`${user?.firstName} ${user?.lastName}` || "Unknown Staff"}
                   name="reportedBy"
+                  readOnly
+                  description="Automatically filled with your name"
                 />
                 <TextInput
                   label="Assigned To"

@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
+import { useLoaderData, Link, Outlet, useLocation } from "@remix-run/react";
 import {
   Title,
   Text,
@@ -18,6 +18,9 @@ import {
   Tooltip,
   Progress,
   Alert,
+  Table,
+  Avatar,
+  Anchor,
 } from "@mantine/core";
 import {
   IconSearch,
@@ -26,6 +29,7 @@ import {
   IconCalendar,
   IconTools,
   IconEye,
+  IconEdit,
 } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
@@ -44,52 +48,67 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
 
-  // Get all assets with room information
-  const assets = await db.roomAsset.findMany({
+  // Get all assets with their room assignments
+  const assets = await db.asset.findMany({
     include: {
-      room: {
+      roomAssignments: {
         include: {
-          type: {
-            select: {
-              displayName: true,
-              name: true,
+          room: {
+            include: {
+              type: {
+                select: {
+                  displayName: true,
+                  name: true,
+                },
+              },
+              blockRelation: {
+                select: {
+                  name: true,
+                },
+              },
             },
           },
-          blockRelation: true,
         },
       },
     },
-    orderBy: [
-      { condition: "asc" }, // Show problematic assets first
-      { lastInspected: "asc" }, // Then least recently inspected
-      { createdAt: "desc" },
-    ],
+    orderBy: { name: "asc" },
   });
 
   // Get asset statistics
   const totalAssets = assets.length;
-  const assetsByCondition = assets.reduce((acc, asset) => {
-    acc[asset.condition] = (acc[asset.condition] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
   const assetsByCategory = assets.reduce((acc, asset) => {
     acc[asset.category] = (acc[asset.category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  // Assets needing attention (poor condition, damaged, broken, or missing)
-  const assetsNeedingAttention = assets.filter(asset => 
-    ['POOR', 'DAMAGED', 'BROKEN', 'MISSING'].includes(asset.condition)
-  );
+  // For condition statistics, we need to aggregate across all room assignments
+  const assetsByCondition: Record<string, number> = {};
+  const assetsNeedingAttention: unknown[] = [];
+  const assetsNeedingInspection: unknown[] = [];
 
-  // Assets needing inspection (no inspection date or over 6 months old)
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  
-  const assetsNeedingInspection = assets.filter(asset => 
-    !asset.lastInspected || asset.lastInspected < sixMonthsAgo
-  );
+  assets.forEach(asset => {
+    if (asset.roomAssignments.length === 0) {
+      // Unassigned asset
+      assetsByCondition['UNASSIGNED'] = (assetsByCondition['UNASSIGNED'] || 0) + 1;
+    } else {
+      asset.roomAssignments.forEach(assignment => {
+        assetsByCondition[assignment.condition] = (assetsByCondition[assignment.condition] || 0) + 1;
+        
+        // Check if needs attention
+        if (['POOR', 'DAMAGED', 'BROKEN'].includes(assignment.condition)) {
+          assetsNeedingAttention.push({ asset, assignment });
+        }
+      });
+    }
+
+    // Assets needing inspection (no inspection date or over 6 months old)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    if (!asset.lastInspected || asset.lastInspected < sixMonthsAgo) {
+      assetsNeedingInspection.push(asset);
+    }
+  });
 
   return json({
     user,
@@ -109,16 +128,23 @@ export default function AssetsManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
+  const location = useLocation();
 
   // Filter assets based on search and filters
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = 
       asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.room.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      asset.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      asset.roomAssignments.some(assignment => 
+        assignment.room.number.toLowerCase().includes(searchTerm.toLowerCase())
+      );
     
     const matchesCategory = !selectedCategory || asset.category === selectedCategory;
-    const matchesCondition = !selectedCondition || asset.condition === selectedCondition;
+    
+    // For condition filtering, check if any room assignment has the selected condition
+    const matchesCondition = !selectedCondition || 
+      (selectedCondition === "UNASSIGNED" && asset.roomAssignments.length === 0) ||
+      asset.roomAssignments.some(assignment => assignment.condition === selectedCondition);
     
     return matchesSearch && matchesCategory && matchesCondition;
   });
@@ -151,6 +177,23 @@ export default function AssetsManagement() {
       default: return "📦";
     }
   };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "ELECTRONICS": return "cyan";
+      case "FURNITURE": return "brown";
+      case "BATHROOM": return "blue";
+      case "KITCHEN": return "orange";
+      case "BEDDING": return "pink";
+      case "LIGHTING": return "yellow";
+      case "SAFETY": return "red";
+      case "DECORATION": return "grape";
+      case "CLEANING": return "green";
+      default: return "gray";
+    }
+  };
+
+  if(location.pathname !== "/dashboard/assets") return <Outlet />
 
   return (
     <DashboardLayout user={user}>
@@ -260,6 +303,7 @@ export default function AssetsManagement() {
                 placeholder="Filter by condition"
                 data={[
                   { value: "", label: "All Conditions" },
+                  { value: "UNASSIGNED", label: "Unassigned" },
                   { value: "EXCELLENT", label: "Excellent" },
                   { value: "GOOD", label: "Good" },
                   { value: "FAIR", label: "Fair" },
@@ -275,116 +319,169 @@ export default function AssetsManagement() {
             </Group>
           </Paper>
 
-          {/* Assets Grid */}
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-            {filteredAssets.map((asset) => (
-              <Card key={asset.id} withBorder shadow="sm" p="md">
-                <Stack gap="sm">
-                  {/* Asset Header */}
-                  <Group justify="space-between">
-                    <Group gap="xs">
-                      <Text>{getCategoryIcon(asset.category)}</Text>
-                      <Text fw={500} size="sm">{asset.name}</Text>
-                    </Group>
-                    <Badge
-                      color={getConditionColor(asset.condition)}
-                      size="sm"
-                    >
-                      {asset.condition}
-                    </Badge>
-                  </Group>
+          {/* Assets Table */}
+          {filteredAssets.length > 0 ? (
+            <Paper withBorder>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Asset</Table.Th>
+                    <Table.Th>Category</Table.Th>
+                    <Table.Th>Room Assignments</Table.Th>
+                    <Table.Th>Serial Number</Table.Th>
+                    <Table.Th>Last Inspected</Table.Th>
+                    <Table.Th>Actions</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {filteredAssets.map((asset) => (
+                    <Table.Tr key={asset.id}>
+                      {/* Asset Name & Description */}
+                      <Table.Td>
+                        <Group gap="sm">
+                          <Avatar size="sm" radius="sm">
+                            {getCategoryIcon(asset.category)}
+                          </Avatar>
+                          <div>
+                            <Text fw={500} size="sm">{asset.name}</Text>
+                            {asset.description && (
+                              <Text size="xs" c="dimmed" lineClamp={2}>
+                                {asset.description}
+                              </Text>
+                            )}
+                            {asset.notes && (
+                              <Text size="xs" c="orange" fs="italic" lineClamp={1}>
+                                {asset.notes}
+                              </Text>
+                            )}
+                          </div>
+                        </Group>
+                      </Table.Td>
 
-                  {/* Room Information */}
-                  <Group gap="xs">
-                    <Text size="sm" c="dimmed">Room:</Text>
-                    <Text size="sm" fw={500}>
-                      {asset.room.number} - {asset.room.type.displayName}
-                    </Text>
-                  </Group>
-                  
-                  <Group gap="xs">
-                    <Text size="sm" c="dimmed">Block:</Text>
-                    <Text size="sm">
-                      {asset.room.blockRelation?.name || asset.room.block}
-                    </Text>
-                  </Group>
+                      {/* Category */}
+                      <Table.Td>
+                        <Badge color={getCategoryColor(asset.category)} size="sm">
+                          {asset.category}
+                        </Badge>
+                      </Table.Td>
 
-                  {/* Asset Details */}
-                  <Group gap="xs">
-                    <Text size="sm" c="dimmed">Category:</Text>
-                    <Badge variant="light" size="sm">
-                      {asset.category.replace('_', ' ')}
-                    </Badge>
-                  </Group>
+                      {/* Room Assignments */}
+                      <Table.Td>
+                        {asset.roomAssignments.length === 0 ? (
+                          <Badge color="gray" variant="light" size="sm">
+                            Unassigned
+                          </Badge>
+                        ) : (
+                          <Stack gap="xs">
+                            {asset.roomAssignments.slice(0, 2).map((assignment) => (
+                              <Group key={assignment.id} gap="xs" wrap="nowrap">
+                                <Anchor
+                                  component={Link}
+                                  to={`/dashboard/rooms/${assignment.room.id}`}
+                                  size="sm"
+                                  fw={500}
+                                >
+                                  Room {assignment.room.number}
+                                </Anchor>
+                                <Badge
+                                  color={getConditionColor(assignment.condition)}
+                                  size="xs"
+                                >
+                                  {assignment.condition}
+                                </Badge>
+                                <Text size="xs" c="dimmed">
+                                  Qty: {assignment.quantity}
+                                </Text>
+                              </Group>
+                            ))}
+                            {asset.roomAssignments.length > 2 && (
+                              <Text size="xs" c="dimmed">
+                                +{asset.roomAssignments.length - 2} more rooms
+                              </Text>
+                            )}
+                          </Stack>
+                        )}
+                      </Table.Td>
 
-                  <Group gap="xs">
-                    <Text size="sm" c="dimmed">Quantity:</Text>
-                    <Text size="sm">{asset.quantity}</Text>
-                  </Group>
+                      {/* Serial Number */}
+                      <Table.Td>
+                        {asset.serialNumber ? (
+                          <Text size="sm" ff="monospace">
+                            {asset.serialNumber}
+                          </Text>
+                        ) : (
+                          <Text size="sm" c="dimmed">—</Text>
+                        )}
+                      </Table.Td>
 
-                  {asset.serialNumber && (
-                    <Group gap="xs">
-                      <Text size="sm" c="dimmed">Serial:</Text>
-                      <Text size="sm" ff="monospace">{asset.serialNumber}</Text>
-                    </Group>
-                  )}
+                      {/* Last Inspected */}
+                      <Table.Td>
+                        {asset.lastInspected ? (
+                          <Text size="sm">
+                            {format(new Date(asset.lastInspected), "MMM dd, yyyy")}
+                          </Text>
+                        ) : (
+                          <Text size="sm" c="dimmed">Never</Text>
+                        )}
+                      </Table.Td>
 
-                  {asset.lastInspected && (
-                    <Group gap="xs">
-                      <Text size="sm" c="dimmed">Last Inspected:</Text>
-                      <Text size="sm">
-                        {format(new Date(asset.lastInspected), "MMM dd, yyyy")}
-                      </Text>
-                    </Group>
-                  )}
+                      {/* Actions */}
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap">
+                          <Tooltip label="Edit Asset">
+                            <ActionIcon
+                              component={Link}
+                              to={`/dashboard/assets/${asset.id}/edit`}
+                              variant="light"
+                              color="gray"
+                              size="sm"
+                            >
+                              <IconEdit size={14} />
+                            </ActionIcon>
+                          </Tooltip>
 
-                  {asset.notes && (
-                    <Text size="sm" c="orange" style={{ fontStyle: 'italic' }}>
-                      {asset.notes}
-                    </Text>
-                  )}
-
-                  {/* Action Buttons */}
-                  <Group gap="xs" mt="md">
-                    <Tooltip label="View Room">
-                      <ActionIcon
-                        component={Link}
-                        to={`/dashboard/rooms/${asset.roomId}`}
-                        variant="light"
-                        size="sm"
-                      >
-                        <IconEye size={14} />
-                      </ActionIcon>
-                    </Tooltip>
-                    
-                    <Tooltip label="Create Maintenance Task">
-                      <ActionIcon
-                        component={Link}
-                        to={`/dashboard/maintenance/new?assetId=${asset.id}`}
-                        variant="light"
-                        color="orange"
-                        size="sm"
-                      >
-                        <IconTools size={14} />
-                      </ActionIcon>
-                    </Tooltip>
-                    
-                    <Tooltip label="Schedule Inspection">
-                      <ActionIcon
-                        variant="light"
-                        color="blue"
-                        size="sm"
-                      >
-                        <IconCalendar size={14} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                </Stack>
-              </Card>
-            ))}
-          </SimpleGrid>
-
-          {filteredAssets.length === 0 && (
+                          {asset.roomAssignments.length > 0 && (
+                            <Tooltip label={`View ${asset.roomAssignments.length === 1 ? 'Room' : 'Rooms'}`}>
+                              <ActionIcon
+                                component={Link}
+                                to={`/dashboard/rooms/${asset.roomAssignments[0].room.id}`}
+                                variant="light"
+                                size="sm"
+                              >
+                                <IconEye size={14} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          
+                          <Tooltip label="Create Maintenance Task">
+                            <ActionIcon
+                              component={Link}
+                              to={`/dashboard/maintenance/new?assetId=${asset.id}`}
+                              variant="light"
+                              color="orange"
+                              size="sm"
+                            >
+                              <IconTools size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                          
+                          <Tooltip label="Schedule Inspection">
+                            <ActionIcon
+                              variant="light"
+                              color="blue"
+                              size="sm"
+                            >
+                              <IconCalendar size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Paper>
+          ) : (
             <Paper withBorder p="xl" ta="center">
               <Text c="dimmed" size="lg">No assets found</Text>
               <Text c="dimmed" size="sm">

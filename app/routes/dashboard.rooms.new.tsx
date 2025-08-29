@@ -18,13 +18,12 @@ import {
   Anchor,
   Divider,
   Card,
-  ActionIcon,
 } from "@mantine/core";
-import { IconArrowLeft, IconDeviceFloppy, IconAlertCircle, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconArrowLeft, IconDeviceFloppy, IconAlertCircle } from "@tabler/icons-react";
 import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { PricingPeriod, AssetCategory, AssetCondition } from "@prisma/client";
+import type { PricingPeriod, AssetCondition } from "@prisma/client";
 import { useState } from "react";
 
 export const meta: MetaFunction = () => {
@@ -48,12 +47,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { displayName: "asc" },
   });
 
-  // Get all existing assets that are not assigned to a room
-  const availableAssets = await db.roomAsset.findMany({
-    where: {
-      roomId: null, // Only unassigned assets
-    },
-    orderBy: { name: "asc" },
+  // Get all existing assets for selection
+  const availableAssets = await db.asset.findMany({
+    orderBy: [
+      { category: "asc" },
+      { name: "asc" }
+    ],
   });
 
   return json({ user, blocks, roomTypes, availableAssets });
@@ -86,49 +85,28 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Floor, capacity, and price must be valid numbers" }, { status: 400 });
   }
 
-  // Parse assets data
-  const assetsData: Array<{
-    name: string;
-    category: AssetCategory;
-    quantity: number;
+  // Parse selected existing assets with their assignments
+  const selectedAssetAssignments: Array<{
+    assetId: string;
     condition: AssetCondition;
-    description?: string;
-    serialNumber?: string;
+    quantity: number;
   }> = [];
-
-  // Get all asset entries from form data
-  let assetIndex = 0;
-  while (formData.has(`assets[${assetIndex}][name]`)) {
-    const name = formData.get(`assets[${assetIndex}][name]`) as string;
-    const category = formData.get(`assets[${assetIndex}][category]`) as AssetCategory;
-    const quantityStr = formData.get(`assets[${assetIndex}][quantity]`) as string;
-    const condition = formData.get(`assets[${assetIndex}][condition]`) as AssetCondition;
-    const description = formData.get(`assets[${assetIndex}][description]`) as string;
-    const serialNumber = formData.get(`assets[${assetIndex}][serialNumber]`) as string;
-
-    if (name && category && quantityStr && condition) {
+  
+  let selectedAssetIndex = 0;
+  while (formData.has(`selectedAssets[${selectedAssetIndex}][assetId]`)) {
+    const assetId = formData.get(`selectedAssets[${selectedAssetIndex}][assetId]`) as string;
+    const condition = formData.get(`selectedAssets[${selectedAssetIndex}][condition]`) as AssetCondition;
+    const quantityStr = formData.get(`selectedAssets[${selectedAssetIndex}][quantity]`) as string;
+    
+    if (assetId && condition && quantityStr) {
       const quantity = parseInt(quantityStr);
       if (!isNaN(quantity) && quantity > 0) {
-        assetsData.push({
-          name,
-          category,
-          quantity,
+        selectedAssetAssignments.push({
+          assetId,
           condition,
-          description: description || undefined,
-          serialNumber: serialNumber || undefined,
+          quantity,
         });
       }
-    }
-    assetIndex++;
-  }
-
-  // Parse selected existing assets
-  const selectedAssetIds: string[] = [];
-  let selectedAssetIndex = 0;
-  while (formData.has(`selectedAssets[${selectedAssetIndex}]`)) {
-    const assetId = formData.get(`selectedAssets[${selectedAssetIndex}]`) as string;
-    if (assetId) {
-      selectedAssetIds.push(assetId);
     }
     selectedAssetIndex++;
   }
@@ -165,29 +143,18 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      // Create new assets if any
-      if (assetsData.length > 0) {
-        await tx.roomAsset.createMany({
-          data: assetsData.map(asset => ({
-            ...asset,
-            roomId: newRoom.id,
-          })),
-        });
-      }
-
-      // Assign selected existing assets to this room
-      if (selectedAssetIds.length > 0) {
-        await tx.roomAsset.updateMany({
-          where: {
-            id: {
-              in: selectedAssetIds,
+      // Assign selected existing assets to this room with their conditions and quantities
+      if (selectedAssetAssignments.length > 0) {
+        for (const assignment of selectedAssetAssignments) {
+          await tx.roomAsset.create({
+            data: {
+              roomId: newRoom.id,
+              assetId: assignment.assetId,
+              condition: assignment.condition,
+              quantity: assignment.quantity,
             },
-            roomId: null, // Only update unassigned assets
-          },
-          data: {
-            roomId: newRoom.id,
-          },
-        });
+          });
+        }
       }
 
       return newRoom;
@@ -212,19 +179,9 @@ export default function AddRoom() {
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
-  // State for managing assets
-  const [assets, setAssets] = useState<Array<{
-    id: string;
-    name: string;
-    category: AssetCategory | "";
-    quantity: number;
-    condition: AssetCondition | "";
-    description: string;
-    serialNumber: string;
-  }>>([]);
-
-  // State for selected existing assets to assign to this room
+  // State for selected existing assets with their conditions and quantities
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [assetAssignments, setAssetAssignments] = useState<Record<string, { condition: AssetCondition | "", quantity: number }>>({});
 
   // Convert room types to select data format
   const roomTypeSelectData = roomTypes.map(type => ({
@@ -238,19 +195,6 @@ export default function AddRoom() {
     { value: "WEEK", label: "Per Week" },
     { value: "MONTH", label: "Per Month" },
     { value: "YEAR", label: "Per Year" },
-  ];
-
-  const assetCategories = [
-    { value: "FURNITURE", label: "Furniture" },
-    { value: "ELECTRONICS", label: "Electronics" },
-    { value: "APPLIANCES", label: "Appliances" },
-    { value: "BEDDING", label: "Bedding" },
-    { value: "BATHROOM", label: "Bathroom" },
-    { value: "KITCHEN", label: "Kitchen" },
-    { value: "LIGHTING", label: "Lighting" },
-    { value: "DECORATION", label: "Decoration" },
-    { value: "SAFETY", label: "Safety" },
-    { value: "OTHER", label: "Other" },
   ];
 
   const assetConditions = [
@@ -269,26 +213,36 @@ export default function AddRoom() {
     label: `Block ${block.name} - ${block.description || 'No description'}`,
   }));
 
-  const addAsset = () => {
-    setAssets(prev => [...prev, {
-      id: Date.now().toString(),
-      name: "",
-      category: "",
-      quantity: 1,
-      condition: "",
-      description: "",
-      serialNumber: "",
-    }]);
+  // Handle asset assignment updates
+  const handleAssetSelectionChange = (assetIds: string[]) => {
+    setSelectedAssetIds(assetIds);
+    
+    // Initialize assignments for new assets with default values
+    const newAssignments = { ...assetAssignments };
+    assetIds.forEach(assetId => {
+      if (!newAssignments[assetId]) {
+        newAssignments[assetId] = { condition: "GOOD", quantity: 1 };
+      }
+    });
+    
+    // Remove assignments for deselected assets
+    Object.keys(newAssignments).forEach(assetId => {
+      if (!assetIds.includes(assetId)) {
+        delete newAssignments[assetId];
+      }
+    });
+    
+    setAssetAssignments(newAssignments);
   };
 
-  const removeAsset = (id: string) => {
-    setAssets(prev => prev.filter(asset => asset.id !== id));
-  };
-
-  const updateAsset = (id: string, field: string, value: string | number) => {
-    setAssets(prev => prev.map(asset => 
-      asset.id === id ? { ...asset, [field]: value } : asset
-    ));
+  const updateAssetAssignment = (assetId: string, field: 'condition' | 'quantity', value: AssetCondition | "" | number) => {
+    setAssetAssignments(prev => ({
+      ...prev,
+      [assetId]: {
+        ...prev[assetId],
+        [field]: value,
+      },
+    }));
   };
 
   return (
@@ -405,125 +359,91 @@ export default function AddRoom() {
 
               {/* Select Existing Assets */}
               {availableAssets.length > 0 && (
-                <MultiSelect
-                  label="Assign Existing Assets"
-                  description="Select from unassigned assets to add to this room"
-                  placeholder="Choose existing assets..."
-                  data={availableAssets.map(asset => ({
-                    value: asset.id,
-                    label: `${asset.name} (${asset.category}) - ${asset.condition}`,
-                  }))}
-                  value={selectedAssetIds}
-                  onChange={setSelectedAssetIds}
-                  searchable
-                  clearable
-                  mb="md"
-                />
-              )}
+                <Stack gap="md">
+                  <MultiSelect
+                    label="Assign Existing Assets"
+                    description="Select from unassigned assets to add to this room"
+                    placeholder="Choose existing assets..."
+                    data={availableAssets.map(asset => ({
+                      value: asset.id,
+                      label: `${asset.name} (${asset.category})`,
+                    }))}
+                    value={selectedAssetIds}
+                    onChange={handleAssetSelectionChange}
+                    searchable
+                    clearable
+                    mb="md"
+                  />
 
-              {/* Create New Assets */}
-              <Group justify="space-between" align="center" mb="md">
-                <Text size="sm" c="dimmed">
-                  Or create new assets for this room
-                </Text>
-                <Button
-                  size="compact-sm"
-                  leftSection={<IconPlus size={14} />}
-                  onClick={addAsset}
-                  variant="light"
-                >
-                  Add New Asset
-                </Button>
-              </Group>
-
-              {assets.length > 0 && (
-                <Stack gap="lg">
-                  {assets.map((asset, index) => (
-                    <Card key={asset.id} p="lg" withBorder shadow="sm">
-                      <Stack gap="md">
-                        <Group justify="space-between" align="flex-start">
-                          <Text size="sm" fw={500} c="blue">Asset #{index + 1}</Text>
-                          <ActionIcon
-                            size="sm"
-                            color="red"
-                            variant="light"
-                            onClick={() => removeAsset(asset.id)}
-                          >
-                            <IconTrash size={14} />
-                          </ActionIcon>
-                        </Group>
-
-                        <Group grow>
-                          <TextInput
-                            label="Asset Name"
-                            name={`assets[${index}][name]`}
-                            value={asset.name}
-                            onChange={(e) => updateAsset(asset.id, "name", e.target.value)}
-                            placeholder="e.g., Queen Bed, TV, Refrigerator"
-                            required
-                          />
-                          <Select
-                            label="Category"
-                            name={`assets[${index}][category]`}
-                            value={asset.category}
-                            onChange={(value) => updateAsset(asset.id, "category", value || "")}
-                            data={assetCategories}
-                            placeholder="Select category"
-                            required
-                          />
-                        </Group>
-
-                        <Group grow>
-                          <NumberInput
-                            label="Quantity"
-                            name={`assets[${index}][quantity]`}
-                            value={asset.quantity}
-                            onChange={(value) => updateAsset(asset.id, "quantity", Number(value) || 1)}
-                            min={1}
-                            required
-                          />
-                          <Select
-                            label="Condition"
-                            name={`assets[${index}][condition]`}
-                            value={asset.condition}
-                            onChange={(value) => updateAsset(asset.id, "condition", value || "")}
-                            data={assetConditions}
-                            placeholder="Select condition"
-                            required
-                          />
-                        </Group>
-
-                        <Group grow>
-                          <TextInput
-                            label="Serial Number"
-                            name={`assets[${index}][serialNumber]`}
-                            value={asset.serialNumber}
-                            onChange={(e) => updateAsset(asset.id, "serialNumber", e.target.value)}
-                            placeholder="Optional serial number"
-                          />
-                          <TextInput
-                            label="Description"
-                            name={`assets[${index}][description]`}
-                            value={asset.description}
-                            onChange={(e) => updateAsset(asset.id, "description", e.target.value)}
-                            placeholder="Optional description or notes"
-                          />
-                        </Group>
-                      </Stack>
-                    </Card>
-                  ))}
+                  {/* Condition and Quantity inputs for selected assets */}
+                  {selectedAssetIds.length > 0 && (
+                    <Stack gap="lg">
+                      <Text size="sm" fw={500} c="blue">Configure Selected Assets</Text>
+                      {selectedAssetIds.map((assetId) => {
+                        const asset = availableAssets.find(a => a.id === assetId);
+                        const assignment = assetAssignments[assetId];
+                        
+                        if (!asset || !assignment) return null;
+                        
+                        return (
+                          <Card key={assetId} p="md" withBorder>
+                            <Stack gap="md">
+                              <Group justify="space-between" align="center">
+                                <Text size="sm" fw={500}>{asset.name}</Text>
+                                <Text size="xs" c="dimmed">{asset.category}</Text>
+                              </Group>
+                              
+                              <Group grow>
+                                <Select
+                                  label="Condition in this room"
+                                  value={assignment.condition}
+                                  onChange={(value) => updateAssetAssignment(assetId, 'condition', value as AssetCondition || "")}
+                                  data={assetConditions}
+                                  placeholder="Select condition"
+                                  required
+                                />
+                                <NumberInput
+                                  label="Quantity"
+                                  value={assignment.quantity}
+                                  onChange={(value) => updateAssetAssignment(assetId, 'quantity', Number(value) || 1)}
+                                  min={1}
+                                  required
+                                />
+                              </Group>
+                            </Stack>
+                          </Card>
+                        );
+                      })}
+                    </Stack>
+                  )}
                 </Stack>
               )}
 
-              {/* Hidden inputs for selected existing assets */}
-              {selectedAssetIds.map((assetId, index) => (
-                <input 
-                  key={assetId}
-                  type="hidden" 
-                  name={`selectedAssets[${index}]`} 
-                  value={assetId} 
-                />
-              ))}
+              {/* Hidden inputs for selected existing assets with their assignments */}
+              {selectedAssetIds.map((assetId, index) => {
+                const assignment = assetAssignments[assetId];
+                if (!assignment) return null;
+                
+                return (
+                  <div key={assetId}>
+                    <input 
+                      type="hidden" 
+                      name={`selectedAssets[${index}][assetId]`} 
+                      value={assetId} 
+                    />
+                    <input 
+                      type="hidden" 
+                      name={`selectedAssets[${index}][condition]`} 
+                      value={assignment.condition} 
+                    />
+                    <input 
+                      type="hidden" 
+                      name={`selectedAssets[${index}][quantity]`} 
+                      value={assignment.quantity.toString()} 
+                    />
+                  </div>
+                );
+              })}
 
               <Group justify="flex-end">
                 <Button 
