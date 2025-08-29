@@ -189,14 +189,14 @@ export default function Dashboard() {
     {
       title: "Today's Check-ins",
       value: stats.todayCheckIns,
-      description: "Guests arriving",
+      description: "Tenants arriving",
       icon: IconCalendar,
       color: "green",
     },
     {
       title: "Today's Check-outs",
       value: stats.todayCheckOuts,
-      description: "Guests departing",
+      description: "Tenants departing",
       icon: IconUsers,
       color: "orange",
     },

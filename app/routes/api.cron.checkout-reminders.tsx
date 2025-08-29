@@ -191,7 +191,7 @@ export async function action({ request }: ActionFunctionArgs) {
           <table border="1" cellpadding="10" cellspacing="0" style="border-collapse: collapse; width: 100%;">
             <thead>
               <tr style="background-color: #f5f5f5;">
-                <th>Guest Name</th>
+                <th>Tenant Name</th>
                 <th>Room</th>
                 <th>Block</th>
                 <th>Checkout Date</th>

@@ -292,7 +292,7 @@ function getRoleBadgeColor(role: UserRole): string {
     case "ADMIN": return "red";
     case "MANAGER": return "blue";
     case "STAFF": return "green";
-    case "GUEST": return "gray";
+    case "TENANT": return "gray";
     default: return "gray";
   }
 }
@@ -437,7 +437,7 @@ export default function UsersManagement() {
                     { value: "ADMIN", label: "Admin" },
                     { value: "MANAGER", label: "Manager" },
                     { value: "STAFF", label: "Staff" },
-                    { value: "GUEST", label: "Guest" },
+                    { value: "TENANT", label: "Tenant" },
                   ]}
                   defaultValue={roleFilter}
                   name="role"
@@ -641,7 +641,7 @@ export default function UsersManagement() {
                   { value: "ADMIN", label: "Admin" },
                   { value: "MANAGER", label: "Manager" },
                   { value: "STAFF", label: "Staff" },
-                  { value: "GUEST", label: "Guest" },
+                  { value: "TENANT", label: "Tenant" },
                 ]}
                 placeholder="Select user role"
               />
@@ -713,7 +713,7 @@ export default function UsersManagement() {
                     { value: "ADMIN", label: "Admin" },
                     { value: "MANAGER", label: "Manager" },
                     { value: "STAFF", label: "Staff" },
-                    { value: "GUEST", label: "Guest" },
+                    { value: "TENANT", label: "Tenant" },
                   ]}
                   disabled={selectedUser.id === currentUserId}
                 />

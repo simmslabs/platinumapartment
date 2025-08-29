@@ -1397,7 +1397,7 @@ async function main() {
       data: {
         roomId: rooms[0].id,
         type: 'REPAIR',
-        description: 'Guest reports intermittent WiFi connection in room',
+        description: 'Tenant reports intermittent WiFi connection in room',
         priority: 'LOW',
         status: 'PENDING',
         reportedBy: admin.id,

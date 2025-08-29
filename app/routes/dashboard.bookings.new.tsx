@@ -97,7 +97,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Get all guests for the dropdown
   const guests = await db.user.findMany({
-    where: { role: "GUEST" },
+    where: { role: "TENANT" },
     select: { 
       id: true, 
       firstName: true, 
@@ -195,7 +195,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Send confirmation emails
     try {
-      // Guest confirmation email
+      // Tenant confirmation email
       // await emailService.sendBookingConfirmation({
       //   firstName: newBooking.user.firstName,
       //   lastName: newBooking.user.lastName,
@@ -339,18 +339,18 @@ export default function NewBooking() {
             
             <Stack gap="md">
               <Select
-                label="Guest"
+                label="Tenant"
                 placeholder="Select guest"
                 name="userId"
                 value={selectedUserId}
                 onChange={(value) => setSelectedUserId(value || "")}
-                data={guests.map(guest => ({
+                data={(guests || []).map(guest => ({
                   value: guest.id,
                   label: `${guest.firstName} ${guest.lastName} (${guest.email})`
                 }))}
                 required
                 searchable
-                description={selectedGuest ? "Guest pre-selected from guest detail page" : ""}
+                description={selectedGuest ? "Tenant pre-selected from guest detail page" : ""}
               />
 
               <Select
@@ -358,7 +358,7 @@ export default function NewBooking() {
                 placeholder="Select room"
                 value={selectedRoom}
                 onChange={(value) => setSelectedRoom(value || "")}
-                data={availableRooms.map(room => {
+                data={(availableRooms || []).map(room => {
                   const periodDisplay = getPricingPeriodDisplay(room.pricingPeriod || 'NIGHT');
                   const dailyEquivalent = calculateDailyEquivalent(room.pricePerNight, room.pricingPeriod || 'NIGHT');
                   const roomWithType = room as typeof room & { type: { displayName: string } };
@@ -436,7 +436,7 @@ export default function NewBooking() {
               )}
 
               <NumberInput
-                label="Number of Guests"
+                label="Number of Tenants"
                 placeholder="2"
                 name="guests"
                 min={1}

@@ -244,7 +244,7 @@ export async function action({ request }: ActionFunctionArgs) {
         const timeSlot = (currentHour >= 8 && currentHour <= 11) ? "morning" : "evening";
 
         const summaryMessage = results.notifiedGuests.length > 0 
-          ? `🏨 Platinum Apartment ${timeSlot.toUpperCase()} Alert: ${results.notifiedGuests.length} guest(s) received daily 75% stay completion notifications. Guests notified: ${notifiedGuestsList}. Sent: ${results.emailsSent} emails, ${results.smsSent} SMS.`
+          ? `🏨 Platinum Apartment ${timeSlot.toUpperCase()} Alert: ${results.notifiedGuests.length} guest(s) received daily 75% stay completion notifications. Tenants notified: ${notifiedGuestsList}. Sent: ${results.emailsSent} emails, ${results.smsSent} SMS.`
           : `🏨 Platinum Apartment: No guests required daily ${timeSlot} notifications at this time.`;
 
         // Send SMS to all staff members

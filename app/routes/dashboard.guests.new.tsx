@@ -33,7 +33,7 @@ import bcrypt from "bcryptjs";
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const isEditing = data?.guest;
   return [
-    { title: `${isEditing ? "Edit" : "Add New"} Guest - Apartment Management` },
+    { title: `${isEditing ? "Edit" : "Add New"} Tenant - Apartment Management` },
     { name: "description", content: `${isEditing ? "Edit" : "Add a new"} guest information` },
   ];
 };
@@ -42,7 +42,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
 
-  if (!user || user.role === "GUEST") {
+  if (!user || user.role === "TENANT") {
     throw new Response("Access denied", { status: 403 });
   }
 
@@ -52,11 +52,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let guest = null;
   if (guestId) {
     guest = await db.user.findUnique({
-      where: { id: guestId, role: "GUEST" },
+      where: { id: guestId, role: "TENANT" },
     });
 
     if (!guest) {
-      throw new Response("Guest not found", { status: 404 });
+      throw new Response("Tenant not found", { status: 404 });
     }
   }
 
@@ -67,7 +67,7 @@ export async function action({ request }: ActionFunctionArgs) {
   await requireUserId(request);
   const user = await getUser(request);
 
-  if (!user || user.role === "GUEST") {
+  if (!user || user.role === "TENANT") {
     throw new Response("Access denied", { status: 403 });
   }
 
@@ -125,18 +125,18 @@ export async function action({ request }: ActionFunctionArgs) {
       // Check if guest exists
       if (!guestId) {
         return json(
-          { errors: { _form: "Guest ID is required for editing" }, success: false },
+          { errors: { _form: "Tenant ID is required for editing" }, success: false },
           { status: 400 }
         );
       }
 
       const existingGuest = await db.user.findUnique({
-        where: { id: guestId, role: "GUEST" },
+        where: { id: guestId, role: "TENANT" },
       });
 
       if (!existingGuest) {
         return json(
-          { errors: { _form: "Guest not found" }, success: false },
+          { errors: { _form: "Tenant not found" }, success: false },
           { status: 404 }
         );
       }
@@ -273,7 +273,7 @@ export async function action({ request }: ActionFunctionArgs) {
           idCard: idCard?.trim() || null,
           gender: gender as "MALE" | "FEMALE" | "OTHER" || null,
           profilePicture: processedImageUrl,
-          role: "GUEST",
+          role: "TENANT",
         },
       });
 
@@ -411,7 +411,7 @@ export default function NewGuestPage() {
           <Stack gap="xs">
             <Breadcrumbs>
               <Anchor component={Link} to="/dashboard">Dashboard</Anchor>
-              <Anchor component={Link} to="/dashboard/guests">Guests</Anchor>
+              <Anchor component={Link} to="/dashboard/guests">Tenants</Anchor>
               {isEditing && guest ? (
                 <>
                   <Anchor component={Link} to={`/dashboard/guests/${guest.id}`}>
@@ -420,10 +420,10 @@ export default function NewGuestPage() {
                   <Text>Edit</Text>
                 </>
               ) : (
-                <Text>New Guest</Text>
+                <Text>New Tenant</Text>
               )}
             </Breadcrumbs>
-            <Title order={1}>{isEditing ? "Edit Guest" : "Add New Guest"}</Title>
+            <Title order={1}>{isEditing ? "Edit Tenant" : "Add New Tenant"}</Title>
           </Stack>
 
           <Button
@@ -432,7 +432,7 @@ export default function NewGuestPage() {
             variant="outline"
             leftSection={<IconArrowLeft size={16} />}
           >
-            {isEditing ? "Back to Guest" : "Back to Guests"}
+            {isEditing ? "Back to Tenant" : "Back to Tenants"}
           </Button>
         </Group>
 
@@ -468,7 +468,7 @@ export default function NewGuestPage() {
             onSubmit={form.onSubmit(_onSubmit)}
           >
             <Stack gap="lg">
-              <Title order={3}>{isEditing ? "Edit Guest Information" : "Guest Information"}</Title>
+              <Title order={3}>{isEditing ? "Edit Tenant Information" : "Tenant Information"}</Title>
 
               {/* Profile Picture Section */}
               <ProfilePictureUploader
@@ -567,7 +567,7 @@ export default function NewGuestPage() {
                   leftSection={<IconUserPlus size={16} />}
                   loading={isSubmitting}
                 >
-                  {isEditing ? "Update Guest" : "Create Guest"}
+                  {isEditing ? "Update Tenant" : "Create Tenant"}
                 </Button>
               </Group>
             </Stack>

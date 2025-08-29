@@ -47,7 +47,7 @@ import DashboardLayout from "~/components/DashboardLayout";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Guest Details - Apartment Management" },
+    { title: "Tenant Details - Apartment Management" },
     { name: "description", content: "Detailed guest statistics and financial information" },
   ];
 };
@@ -58,12 +58,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const guestId = params.guestId;
 
   if (!guestId) {
-    throw new Response("Guest ID is required", { status: 400 });
+    throw new Response("Tenant ID is required", { status: 400 });
   }
 
   // Fetch guest with all related data
   const guest = await db.user.findUnique({
-    where: { id: guestId, role: "GUEST" },
+    where: { id: guestId, role: "TENANT" },
     include: {
       bookings: {
         include: {
@@ -90,7 +90,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   if (!guest) {
-    throw new Response("Guest not found", { status: 404 });
+    throw new Response("Tenant not found", { status: 404 });
   }
 
   // Calculate financial statistics
@@ -224,10 +224,10 @@ export default function GuestDetails() {
               leftSection={<IconArrowLeft size={16} />}
               variant="subtle"
             >
-              Back to Guests
+              Back to Tenants
             </Button>
             <Title order={2}>
-              {guest.firstName} {guest.lastName} - Guest Details
+              {guest.firstName} {guest.lastName} - Tenant Details
             </Title>
             <Badge color={loyaltyTier.color} size="lg">
               {loyaltyTier.tier} Member
@@ -240,7 +240,7 @@ export default function GuestDetails() {
               leftSection={<IconEdit size={16} />}
               variant="light"
             >
-              Edit Guest
+              Edit Tenant
             </Button>
             <Button
               component={Link}
@@ -264,11 +264,11 @@ export default function GuestDetails() {
               window.history.replaceState({}, "", url);
             }}
           >
-            Guest information has been updated successfully.
+            Tenant information has been updated successfully.
           </Notification>
         )}
 
-        {/* Guest Information */}
+        {/* Tenant Information */}
         <Grid>
           <Grid.Col span={{ base: 12, md: 4 }}>
             <Card withBorder h="100%">
@@ -291,7 +291,7 @@ export default function GuestDetails() {
                       {guest.firstName} {guest.lastName}
                     </Text>
                     <Text c="dimmed" size="sm">
-                      Guest Profile
+                      Tenant Profile
                     </Text>
                   </div>
                 </Group>
@@ -667,7 +667,7 @@ export default function GuestDetails() {
         {/* Reviews */}
         {guest.reviews.length > 0 && (
           <Card withBorder>
-            <Text fw={600} mb="md">Guest Reviews</Text>
+            <Text fw={600} mb="md">Tenant Reviews</Text>
             <Timeline>
               {guest.reviews.slice(0, 5).map((review) => (
                 <Timeline.Item key={review.id} title={review.title || "Review"}>

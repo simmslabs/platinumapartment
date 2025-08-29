@@ -24,6 +24,7 @@ import {
   IconUsers,
   IconCurrencyDollar,
   IconBed,
+  IconEdit,
 } from "@tabler/icons-react";
 import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
@@ -205,7 +206,7 @@ export default function BlockDetails() {
             <ActionIcon
               variant="subtle"
               size="lg"
-              onClick={() => navigate("/dashboard/rooms")}
+              onClick={() => navigate("/dashboard/blocks")}
             >
               <IconArrowLeft size={20} />
             </ActionIcon>
@@ -217,6 +218,14 @@ export default function BlockDetails() {
             </div>
           </Group>
           <Group>
+            {user?.role === "ADMIN" && (
+              <Button
+                leftSection={<IconEdit size={16} />}
+                onClick={() => navigate(`/dashboard/blocks/${block.id}/edit`)}
+              >
+                Edit Block
+              </Button>
+            )}
             <Badge size="lg" variant="light" color="blue">
               {statistics.totalRooms} Total Rooms
             </Badge>
@@ -316,7 +325,7 @@ export default function BlockDetails() {
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>Room</Table.Th>
-                      <Table.Th>Guest</Table.Th>
+                      <Table.Th>Tenant</Table.Th>
                       <Table.Th>Check In</Table.Th>
                       <Table.Th>Check Out</Table.Th>
                       <Table.Th>Status</Table.Th>
@@ -439,7 +448,7 @@ export default function BlockDetails() {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Date</Table.Th>
-                  <Table.Th>Guest</Table.Th>
+                  <Table.Th>Tenant</Table.Th>
                   <Table.Th>Room</Table.Th>
                   <Table.Th>Duration</Table.Th>
                   <Table.Th>Amount</Table.Th>

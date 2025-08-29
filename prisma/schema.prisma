@@ -17,7 +17,7 @@ model User {
   password       String
   firstName      String
   lastName       String
-  role           UserRole @default(GUEST)
+  role           UserRole @default(TENANT)
   phone          String?
   address        String?
   idCard         String? // ID card number (nullable for now)
@@ -45,7 +45,7 @@ enum UserRole {
   ADMIN
   MANAGER
   STAFF
-  GUEST
+  TENANT
 }
 
 enum Gender {
@@ -640,7 +640,7 @@ enum Priority {
   CRITICAL
 }
 
-// Guest Reviews
+// Tenant Reviews
 model Review {
   id        String         @id @default(cuid())
   userId    String

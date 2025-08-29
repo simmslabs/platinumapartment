@@ -186,7 +186,7 @@ export default function NewMaintenanceTask() {
                 label="Room"
                 placeholder="Select room"
                 name="roomId"
-                data={rooms.map(room => ({
+                data={(rooms || []).map(room => ({
                   value: room.id,
                   label: `Room ${room.number} (Block ${room.block}) - ${room.type.displayName}`
                 }))}
@@ -201,7 +201,7 @@ export default function NewMaintenanceTask() {
                   label="Asset (Optional)"
                   placeholder="Select specific asset or leave blank for general room maintenance"
                   name="assetId"
-                  data={filteredAssets.map(roomAsset => ({
+                  data={(filteredAssets || []).map(roomAsset => ({
                     value: roomAsset.asset.id,
                     label: `${roomAsset.asset.name} (${roomAsset.asset.category.replace("_", " ")})`,
                     disabled: roomAsset.condition === "BROKEN" || roomAsset.condition === "MISSING"

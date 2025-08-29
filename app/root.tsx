@@ -11,6 +11,7 @@ import type { LinksFunction } from "@remix-run/node";
 import { MantineProvider, ColorSchemeScript } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { ModalsProvider } from "@mantine/modals";
+import { NavigationProgress } from "@mantine/nprogress";
 import { ErrorBoundary as CustomErrorBoundary } from "./components/ErrorBoundary";
 
 import "./tailwind.css";
@@ -20,6 +21,7 @@ import "@mantine/dates/styles.css";
 import "@mantine/dropzone/styles.css";
 import "@mantine/spotlight/styles.css";
 import "@mantine/charts/styles.css";
+import "@mantine/nprogress/styles.css";
 import { theme } from "./utils/theme";
 
 export const links: LinksFunction = () => [
@@ -63,6 +65,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           defaultColorScheme="light"
         >
           <ModalsProvider>
+            <NavigationProgress />
             <Notifications />
             {children}
           </ModalsProvider>
@@ -100,6 +103,7 @@ export function ErrorBoundary() {
         </head>
         <body>
           <MantineProvider theme={theme} defaultColorScheme="light">
+            <NavigationProgress />
             <CustomErrorBoundary 
               error={{
                 status: error.status,
@@ -123,6 +127,7 @@ export function ErrorBoundary() {
       </head>
       <body>
         <MantineProvider theme={theme} defaultColorScheme="light">
+          <NavigationProgress />
           <CustomErrorBoundary />
         </MantineProvider>
       </body>

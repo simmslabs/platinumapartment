@@ -35,7 +35,7 @@ import { emailService } from "~/utils/email.server";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Guests - Apartment Management" },
+    { title: "Tenants - Apartment Management" },
     { name: "description", content: "Manage apartment guests" },
   ];
 };
@@ -45,7 +45,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
 
   const guests = await db.user.findMany({
-    where: { role: "GUEST" },
+    where: { role: "TENANT" },
     include: {
       bookings: {
         include: {
@@ -139,7 +139,7 @@ export async function action({ request }: ActionFunctionArgs) {
           lastName,
           phone: phone || null,
           address: address || null,
-          role: "GUEST",
+          role: "TENANT",
         },
       });
 
@@ -157,7 +157,7 @@ export async function action({ request }: ActionFunctionArgs) {
         // Don't fail the user creation if email fails
       }
 
-      return json({ success: "Guest created successfully with auto-generated password sent via email!" });
+      return json({ success: "Tenant created successfully with auto-generated password sent via email!" });
     }
 
     if (intent === "update") {
@@ -181,7 +181,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      return json({ success: "Guest updated successfully" });
+      return json({ success: "Tenant updated successfully" });
     }
 
     if (intent === "delete") {
@@ -240,7 +240,7 @@ export async function action({ request }: ActionFunctionArgs) {
           });
         });
 
-        return json({ success: "Guest and all related data deleted successfully" });
+        return json({ success: "Tenant and all related data deleted successfully" });
       } catch (deleteError) {
         console.error("Error deleting guest:", deleteError);
         return json({ error: "Failed to delete guest. Please try again or contact support." }, { status: 500 });
@@ -281,7 +281,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {
-    console.error("Guest action error:", error);
+    console.error("Tenant action error:", error);
     if (error && typeof error === 'object' && 'code' in error && error.code === "P2002") {
       return json({ error: "Email already exists" }, { status: 400 });
     }
@@ -289,7 +289,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
-export default function Guests() {
+export default function Tenants() {
   const { user, guests, stats } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
@@ -405,7 +405,7 @@ export default function Guests() {
     <DashboardLayout user={user}>
         <Stack>
           <Group justify="space-between">
-            <Title order={2}>Guests Management</Title>
+            <Title order={2}>Tenants Management</Title>
             {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
               <Group>
                 <Button 
@@ -413,14 +413,14 @@ export default function Guests() {
                   onClick={openImport}
                   variant="outline"
                 >
-                  Import Guests
+                  Import Tenants
                 </Button>
                 <Button 
                   component={Link}
                   to="/dashboard/guests/new"
                   leftSection={<IconPlus size={16} />}
                 >
-                  Add Guest
+                  Add Tenant
                 </Button>
               </Group>
             )}
@@ -452,7 +452,7 @@ export default function Guests() {
               <Paper p="md" withBorder>
                 <Group justify="space-between">
                   <div>
-                    <Text c="dimmed" size="sm">Total Guests</Text>
+                    <Text c="dimmed" size="sm">Total Tenants</Text>
                     <Text fw={700} size="xl">{stats.totalGuests}</Text>
                     <Text c="dimmed" size="xs">{stats.activeGuests} active</Text>
                   </div>
@@ -530,9 +530,9 @@ export default function Guests() {
                 value={filterStatus}
                 onChange={(value) => setFilterStatus(value || "all")}
                 data={[
-                  { value: "all", label: "All Guests" },
-                  { value: "active", label: "Active Guests" },
-                  { value: "inactive", label: "Inactive Guests" },
+                  { value: "all", label: "All Tenants" },
+                  { value: "active", label: "Active Tenants" },
+                  { value: "inactive", label: "Inactive Tenants" },
                 ]}
                 style={{ minWidth: 150 }}
               />
@@ -549,7 +549,7 @@ export default function Guests() {
               <Table striped highlightOnHover>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Guest Information</Table.Th>
+                    <Table.Th>Tenant Information</Table.Th>
                     <Table.Th>Contact</Table.Th>
                     <Table.Th>Total Bookings</Table.Th>
                     <Table.Th>Latest Booking</Table.Th>
@@ -695,7 +695,7 @@ export default function Guests() {
           <Modal 
             opened={deleteModalOpened} 
             onClose={closeDeleteModal} 
-            title="Force Delete Guest" 
+            title="Force Delete Tenant" 
             size="md"
             centered
           >
@@ -710,7 +710,7 @@ export default function Guests() {
                   <List.Item>All payment records and transactions</List.Item>
                   <List.Item>All receipts and financial history</List.Item>
                   <List.Item>All security deposits</List.Item>
-                  <List.Item>Guest profile and personal data</List.Item>
+                  <List.Item>Tenant profile and personal data</List.Item>
                 </List>
                 <Text size="sm" mt="xs" fw={500} c="red">
                   This operation uses cascade deletion to ensure data integrity. This action cannot be undone!
@@ -775,14 +775,14 @@ export default function Guests() {
                   disabled={confirmationText !== "FORCE DELETE"}
                   leftSection={<IconTrash size={16} />}
                 >
-                  Force Delete Guest
+                  Force Delete Tenant
                 </Button>
               </Group>
             </Stack>
           </Modal>
 
-          {/* Import Guests Modal */}
-          <Modal opened={importOpened} onClose={closeImport} title="Import Guests from Excel" size="lg">
+          {/* Import Tenants Modal */}
+          <Modal opened={importOpened} onClose={closeImport} title="Import Tenants from Excel" size="lg">
             <Stack>
               <Alert color="blue" icon={<IconInfoCircle size={16} />}>
                 Upload an Excel file (.xlsx) with guest information. 
@@ -858,7 +858,7 @@ export default function Guests() {
                       disabled={!importFile}
                       leftSection={<IconUpload size={16} />}
                     >
-                      Import Guests
+                      Import Tenants
                     </Button>
                   </Group>
                 </Stack>

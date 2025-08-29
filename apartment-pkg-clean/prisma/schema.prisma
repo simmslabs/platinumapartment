@@ -213,7 +213,7 @@ enum Priority {
   CRITICAL
 }
 
-// Guest Reviews
+// Tenant Reviews
 model Review {
   id          String   @id @default(cuid())
   userId      String

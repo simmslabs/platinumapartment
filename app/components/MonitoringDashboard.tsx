@@ -3,7 +3,7 @@ import { Grid, Text, Badge, Button, Group, Stack, Title, ActionIcon, Tooltip } f
 import { IconClock, IconUsers, IconBed, IconAlertTriangle, IconPhone, IconMail, IconRefresh } from "@tabler/icons-react";
 import { format, differenceInHours, isPast } from "date-fns";
 
-interface Guest {
+interface Tenant {
   id: string;
   firstName: string;
   lastName: string;
@@ -22,7 +22,7 @@ interface Booking {
   checkIn: Date;
   checkOut: Date;
   status: "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED";
-  user: Guest;
+  user: Tenant;
   room: Room;
 }
 
@@ -152,7 +152,7 @@ export function MonitoringDashboard({ bookings, stats, onRefresh }: MonitoringDa
         <Grid.Col span={{ base: 12, sm: 6, lg: 3 }}>
           <div className="stats-card card-info fade-in">
             <div className="stats-number text-primary">{stats.totalActiveGuests}</div>
-            <div className="stats-label">Active Guests</div>
+            <div className="stats-label">Active Tenants</div>
             <Badge color="blue" variant="light" size="sm" className="mt-2">
               Currently Staying
             </Badge>

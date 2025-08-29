@@ -173,8 +173,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const paymentData = payments.map(payment => ({
     "Transaction ID": payment.id,
     "Date": format(payment.paidAt || payment.createdAt, "yyyy-MM-dd HH:mm"),
-    "Guest Name": `${payment.booking.user.firstName} ${payment.booking.user.lastName}`,
-    "Guest Email": payment.booking.user.email,
+    "Tenant Name": `${payment.booking.user.firstName} ${payment.booking.user.lastName}`,
+    "Tenant Email": payment.booking.user.email,
     "Room Number": payment.booking.room.number,
     "Room Type": payment.booking.room.type.displayName,
     "Amount": payment.amount,
@@ -186,8 +186,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const depositData = securityDeposits.map(deposit => ({
     "Deposit ID": deposit.id,
     "Date": format(deposit.paidAt || deposit.createdAt, "yyyy-MM-dd HH:mm"),
-    "Guest Name": `${deposit.booking.user.firstName} ${deposit.booking.user.lastName}`,
-    "Guest Email": deposit.booking.user.email,
+    "Tenant Name": `${deposit.booking.user.firstName} ${deposit.booking.user.lastName}`,
+    "Tenant Email": deposit.booking.user.email,
     "Room Number": deposit.booking.room.number,
     "Room Type": deposit.booking.room.type.displayName,
     "Amount": deposit.amount,
@@ -202,8 +202,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     "Created Date": format(booking.createdAt, "yyyy-MM-dd HH:mm"),
     "Check-in": format(booking.checkIn, "yyyy-MM-dd"),
     "Check-out": format(booking.checkOut, "yyyy-MM-dd"),
-    "Guest Name": `${booking.user.firstName} ${booking.user.lastName}`,
-    "Guest Email": booking.user.email,
+    "Tenant Name": `${booking.user.firstName} ${booking.user.lastName}`,
+    "Tenant Email": booking.user.email,
     "Room Number": booking.room.number,
     "Room Type": booking.room.type.displayName,
     "Total Amount": booking.totalAmount,
@@ -264,11 +264,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   } else {
     // Generate CSV format (combined data)
     const csvData = [
-      ...summaryData.map(row => ({ Type: "Summary", ...row, "Guest Name": "", "Room Number": "", Amount: "" })),
-      { Type: "---", Metric: "---", Value: "---", "Guest Name": "---", "Room Number": "---", Amount: "---" },
-      ...paymentData.map(row => ({ Type: "Payment", Metric: row["Transaction ID"], Value: row["Date"], "Guest Name": row["Guest Name"], "Room Number": row["Room Number"], Amount: row["Amount"] })),
-      { Type: "---", Metric: "---", Value: "---", "Guest Name": "---", "Room Number": "---", Amount: "---" },
-      ...depositData.map(row => ({ Type: "Security Deposit", Metric: row["Deposit ID"], Value: row["Date"], "Guest Name": row["Guest Name"], "Room Number": row["Room Number"], Amount: row["Amount"] })),
+      ...summaryData.map(row => ({ Type: "Summary", ...row, "Tenant Name": "", "Room Number": "", Amount: "" })),
+      { Type: "---", Metric: "---", Value: "---", "Tenant Name": "---", "Room Number": "---", Amount: "---" },
+      ...paymentData.map(row => ({ Type: "Payment", Metric: row["Transaction ID"], Value: row["Date"], "Tenant Name": row["Tenant Name"], "Room Number": row["Room Number"], Amount: row["Amount"] })),
+      { Type: "---", Metric: "---", Value: "---", "Tenant Name": "---", "Room Number": "---", Amount: "---" },
+      ...depositData.map(row => ({ Type: "Security Deposit", Metric: row["Deposit ID"], Value: row["Date"], "Tenant Name": row["Tenant Name"], "Room Number": row["Room Number"], Amount: row["Amount"] })),
     ];
 
     const csv = [

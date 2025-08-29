@@ -756,7 +756,7 @@ export default function Payments() {
             <Table striped highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Guest</Table.Th>
+                  <Table.Th>Tenant</Table.Th>
                   <Table.Th>Room</Table.Th>
                   <Table.Th>Amount</Table.Th>
                 <Table.Th>Method</Table.Th>
@@ -896,7 +896,7 @@ export default function Payments() {
                   mb="md"
                 >
                   <Text size="sm">
-                    <strong>Guest:</strong> {selectedBooking.user.firstName} {selectedBooking.user.lastName}
+                    <strong>Tenant:</strong> {selectedBooking.user.firstName} {selectedBooking.user.lastName}
                   </Text>
                   <Text size="sm">
                     <strong>Room:</strong> {selectedBooking.room.number}
@@ -917,7 +917,7 @@ export default function Payments() {
                 placeholder="Select booking"
                 name="bookingId"
                 defaultValue={selectedBooking?.id}
-                data={allBookingsForDropdown.map(booking => ({
+                data={(allBookingsForDropdown || []).map(booking => ({
                   value: booking.id,
                   label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number} (₵${booking.totalAmount})${'payment' in booking && booking.payment ? ' [PAID]' : ''}`
                 }))}
@@ -929,7 +929,7 @@ export default function Payments() {
                 label="Payment Account"
                 placeholder="Select payment account"
                 name="paymentAccountId"
-                data={paymentAccounts.map(account => ({
+                data={(paymentAccounts || []).map(account => ({
                   value: account.id,
                   label: `${account.accountName || `${account.type} Account`} (${account.type}) - ${account.provider}`
                 }))}

@@ -73,7 +73,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Filter bookings based on user role and soft deletion
   const bookingFilter = {
-    ...(user?.role === "GUEST" ? { userId: userId } : {}), // Guests only see their own bookings
+    ...(user?.role === "TENANT" ? { userId: userId } : {}), // Tenants only see their own bookings
     ...(showDeleted ? {} : { deletedAt: null }), // Exclude soft-deleted bookings by default
   };
 
@@ -139,7 +139,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const guests = await db.user.findMany({
-    where: { role: "GUEST" },
+    where: { role: "TENANT" },
     select: { id: true, firstName: true, lastName: true, email: true, phone: true },
   });
 
@@ -156,7 +156,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // 1. MNOTIFY_API_KEY environment variable
   // 2. MNOTIFY_SENDER_ID environment variable  
   // 3. ADMIN_PHONE_NUMBER environment variable for admin alerts
-  // 4. Guest must have a valid phone number in their profile
+  // 4. Tenant must have a valid phone number in their profile
   // 
   // Admin gets notified for: New bookings, Status changes, Deletions, Restorations
 
@@ -763,7 +763,7 @@ export default function Bookings() {
             icon: IconCheck,
             warning: "This will send SMS notifications to the guest and admin.",
             consequences: [
-              "Guest will receive booking confirmation SMS",
+              "Tenant will receive booking confirmation SMS",
               "Admin will be notified of the confirmation",
               "Room status may be updated",
               "Payment reminders may be triggered"
@@ -772,32 +772,32 @@ export default function Bookings() {
             actionText: "Confirm Booking"
           },
           "CHECKED_IN": {
-            title: "Check In Guest", 
+            title: "Check In Tenant", 
             color: "blue",
             icon: IconCheck,
             warning: "This will mark the guest as checked in and update room status.",
             consequences: [
               "Room status will change to OCCUPIED",
-              "Guest will receive check-in welcome SMS",
+              "Tenant will receive check-in welcome SMS",
               "Admin will be notified of check-in",
               "Check-out reminders will be scheduled"
             ],
             confirmText: "CHECK IN",
-            actionText: "Check In Guest"
+            actionText: "Check In Tenant"
           },
           "CHECKED_OUT": {
-            title: "Check Out Guest",
+            title: "Check Out Tenant",
             color: "gray", 
             icon: IconCheck,
             warning: "This will complete the guest's stay and free up the room.",
             consequences: [
               "Room status will change to AVAILABLE",
-              "Guest will receive thank you SMS",
+              "Tenant will receive thank you SMS",
               "Admin will be notified of check-out",
               "Final billing may be processed"
             ],
             confirmText: "CHECK OUT",
-            actionText: "Check Out Guest"
+            actionText: "Check Out Tenant"
           },
           "CANCELLED": {
             title: "Cancel Booking",
@@ -806,7 +806,7 @@ export default function Bookings() {
             warning: "⚠️ This will cancel the booking and may affect revenue.",
             consequences: [
               "Booking will be marked as cancelled",
-              "Guest will receive cancellation SMS",
+              "Tenant will receive cancellation SMS",
               "Room will become available again", 
               "Refund processing may be required"
             ],
@@ -820,7 +820,7 @@ export default function Bookings() {
             warning: "This will reset the booking to pending status.",
             consequences: [
               "Booking status will change to pending",
-              "Guest will be notified of status change",
+              "Tenant will be notified of status change",
               "Payment confirmation may be required",
               "Room availability may change"
             ],
@@ -839,7 +839,7 @@ export default function Bookings() {
           warning: "This will soft-delete the booking. It can be restored later.",
           consequences: [
             "Booking will be moved to deleted items",
-            "Guest will receive deletion notification SMS",
+            "Tenant will receive deletion notification SMS",
             "Room will become available",
             "Admin will be alerted of deletion",
             "Booking can be restored from deleted view"
@@ -857,7 +857,7 @@ export default function Bookings() {
           warning: "This will restore the deleted booking to active status.",
           consequences: [
             "Booking will be reactivated",
-            "Guest will receive restoration SMS",
+            "Tenant will receive restoration SMS",
             "Room availability will be updated",
             "Admin will be notified of restoration"
           ],
@@ -877,7 +877,7 @@ export default function Bookings() {
             "ALL related data will be lost forever",
             "Payment records may be affected", 
             "This action CANNOT be undone",
-            "Guest will NOT be notified (booking is gone)"
+            "Tenant will NOT be notified (booking is gone)"
           ],
           confirmText: "PERMANENTLY DELETE",
           actionText: "Permanently Delete"
@@ -935,7 +935,7 @@ export default function Bookings() {
       <Stack>
         <Group justify="space-between">
           <Title order={2}>
-            {user?.role === "GUEST" ? "My Bookings" : "Bookings Management"}
+            {user?.role === "TENANT" ? "My Bookings" : "Bookings Management"}
           </Title>
           {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
             <Button 
@@ -1149,12 +1149,12 @@ export default function Bookings() {
               <Table.Thead>
                 <Table.Tr>
                   {(user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "STAFF") && (
-                    <Table.Th>Guest</Table.Th>
+                    <Table.Th>Tenant</Table.Th>
                   )}
                   <Table.Th>Room</Table.Th>
                   <Table.Th>Check-in</Table.Th>
                 <Table.Th>Check-out</Table.Th>
-                <Table.Th>Guests</Table.Th>
+                <Table.Th>Tenants</Table.Th>
                 <Table.Th>Total</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Payment</Table.Th>

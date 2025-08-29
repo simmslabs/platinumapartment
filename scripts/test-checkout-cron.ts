@@ -37,7 +37,7 @@ async function testCheckoutCron() {
       console.log(`   • Timestamp: ${result.summary.timestamp}`);
       
       if (result.notifications && result.notifications.length > 0) {
-        console.log('\n📋 Guest Notifications Sent:');
+        console.log('\n📋 Tenant Notifications Sent:');
         result.notifications.forEach((notification: { guest: string; room: string; checkOut: string; daysRemaining: number; completionPercentage: number; phoneNumber: string }, index: number) => {
           console.log(`   ${index + 1}. ${notification.guest} - Room ${notification.room}`);
           console.log(`      Check out: ${notification.checkOut} (${notification.daysRemaining} days remaining)`);

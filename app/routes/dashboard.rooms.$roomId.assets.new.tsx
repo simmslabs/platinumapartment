@@ -180,7 +180,7 @@ export default function AddRoomAsset() {
   ];
 
   // Prepare asset data for multiselect
-  const assetSelectData = allAssets.map(asset => ({
+  const assetSelectData = (allAssets || []).map(asset => ({
     value: asset.id,
     label: `${asset.name} (${asset.category.replace('_', ' ')})`,
   }));

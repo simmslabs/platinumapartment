@@ -341,6 +341,20 @@ export const analyticsTheme: MantineThemeOverride = {
         },
       }),
     },
+
+    // NavigationProgress styling
+    NavigationProgress: {
+      styles: (theme: MantineTheme) => ({
+        root: {
+          height: rem(3),
+        },
+        
+        bar: {
+          backgroundColor: theme.colors.brand[6],
+          transition: 'width 200ms ease',
+        },
+      }),
+    },
   },
 
   // Other theme properties

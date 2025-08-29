@@ -364,7 +364,7 @@ export default function AddRoom() {
                     label="Assign Existing Assets"
                     description="Select from unassigned assets to add to this room"
                     placeholder="Choose existing assets..."
-                    data={availableAssets.map(asset => ({
+                    data={(availableAssets || []).map(asset => ({
                       value: asset.id,
                       label: `${asset.name} (${asset.category})`,
                     }))}

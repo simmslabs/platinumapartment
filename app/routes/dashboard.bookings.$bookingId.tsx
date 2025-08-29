@@ -99,7 +99,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Check if user has permission to view this booking
-  if (user?.role === "GUEST" && booking.userId !== userId) {
+  if (user?.role === "TENANT" && booking.userId !== userId) {
     throw new Response("Unauthorized", { status: 403 });
   }
 
@@ -276,11 +276,11 @@ export default function BookingDetail() {
                 </Stack>
               </Card>
 
-              {/* Guest Information */}
+              {/* Tenant Information */}
               <Card withBorder>
                 <Stack gap="md">
                   <Group justify="space-between" align="center">
-                    <Text size="lg" fw={600}>Guest Information</Text>
+                    <Text size="lg" fw={600}>Tenant Information</Text>
                     <Button
                       component={Link}
                       to={`/dashboard/guests/${booking.user.id}`}

@@ -863,12 +863,12 @@ export default function Monitoring() {
               <Stack>
                 <Alert
                   icon={<IconInfoCircle size={16} />}
-                  title="Guest Information"
+                  title="Tenant Information"
                   color="blue"
                   variant="light"
                 >
                   <Text size="sm">
-                    Guest: {selectedGuest.booking?.user?.firstName} {selectedGuest.booking?.user?.lastName}
+                    Tenant: {selectedGuest.booking?.user?.firstName} {selectedGuest.booking?.user?.lastName}
                   </Text>
                   <Text size="sm">
                     Room: Unit {selectedGuest.booking?.room?.number}

@@ -39,7 +39,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   
   // Check permissions
-  if (user?.role === "GUEST") {
+  if (user?.role === "TENANT") {
     throw new Response("Unauthorized", { status: 403 });
   }
 
@@ -111,7 +111,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const user = await getUser(request);
   
   // Check permissions
-  if (user?.role === "GUEST") {
+  if (user?.role === "TENANT") {
     throw new Response("Unauthorized", { status: 403 });
   }
 
@@ -322,7 +322,7 @@ export default function ReceiveSecurityDeposit() {
                 <Paper bg="gray.0" p="md" radius="sm">
                   <Grid>
                     <Grid.Col span={6}>
-                      <Text size="sm" c="dimmed">Guest</Text>
+                      <Text size="sm" c="dimmed">Tenant</Text>
                       <Text fw={500}>{booking.user.firstName} {booking.user.lastName}</Text>
                     </Grid.Col>
                     <Grid.Col span={6}>
@@ -382,7 +382,7 @@ export default function ReceiveSecurityDeposit() {
                       label="Payment Account"
                       placeholder="Select account where payment was received"
                       required
-                      data={paymentAccounts.map(account => ({
+                      data={(paymentAccounts || []).map(account => ({
                         value: account.id,
                         label: `${account.accountName || account.id} (${account.type})`
                       }))}

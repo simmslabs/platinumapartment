@@ -74,7 +74,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
       isActive: location.pathname.includes("/monitoring")
     },
     { icon: IconBed, label: "Rooms", link: "/dashboard/rooms", isActive: location.pathname.includes("/rooms") },
-    { icon: IconUsers, label: "Guests", link: "/dashboard/guests", isActive: location.pathname.includes("/guests") },
+    { icon: IconUsers, label: "Tenants", link: "/dashboard/guests", isActive: location.pathname.includes("/guests") },
     { 
       icon: IconBell, 
       label: "Bookings", 
@@ -84,7 +84,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
   ];
 
   const propertyManagementItems = [
-    // { icon: IconBuildingStore, label: "Blocks", link: "/dashboard/blocks", isActive: location.pathname.includes("/blocks") },
+    { icon: IconBuildingStore, label: "Blocks", link: "/dashboard/blocks", isActive: location.pathname.includes("/blocks") },
     { icon: IconClockHour2, label: "Maintenance", link: "/dashboard/maintenance", isActive: location.pathname.includes("/maintenance") },
     { icon: IconPlayerPlay, label: "Services", link: "/dashboard/services", isActive: location.pathname.includes("/services") },
     { icon: IconPackage, label: "Assets", link: "/dashboard/assets", isActive: location.pathname.includes("/assets") },
@@ -111,7 +111,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
       return !["Users"].includes(item.label);
     }
     if (user.role === "STAFF") {
-      return ["Dashboard", "Monitoring", "Rooms", "Guests", "Bookings"].includes(item.label);
+      return ["Dashboard", "Monitoring", "Rooms", "Tenants", "Bookings"].includes(item.label);
     }
     return ["Dashboard", "Monitoring"].includes(item.label);
   });

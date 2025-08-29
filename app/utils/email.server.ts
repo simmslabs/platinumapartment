@@ -351,7 +351,7 @@ function generateBookingConfirmationHTML({
             <span>${bookingId}</span>
           </div>
           <div class="detail-row">
-            <span><strong>Guest:</strong></span>
+            <span><strong>Tenant:</strong></span>
             <span>${firstName} ${lastName}</span>
           </div>
           <div class="detail-row">
@@ -421,7 +421,7 @@ Great news! Your booking at Platinum Apartment has been confirmed. We're excited
 
 Booking Details:
 - Booking ID: ${bookingId}
-- Guest: ${firstName} ${lastName}
+- Tenant: ${firstName} ${lastName}
 - Unit: Unit ${roomNumber}
 - Check-in: ${checkIn}
 - Check-out: ${checkOut}

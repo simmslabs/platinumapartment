@@ -248,9 +248,9 @@ export async function action({ request }: ActionFunctionArgs) {
     // 1. MNOTIFY_API_KEY environment variable
     // 2. MNOTIFY_SENDER_ID environment variable  
     // 3. ADMIN_PHONE_NUMBER environment variable for admin alerts
-    // 4. Guest must have a valid phone number in their profile
+    // 4. Tenant must have a valid phone number in their profile
     try {
-      // Guest payment confirmation email
+      // Tenant payment confirmation email
       // await emailService.sendBookingConfirmation({
       //   firstName: booking.user.firstName,
       //   lastName: booking.user.lastName,
@@ -262,7 +262,7 @@ export async function action({ request }: ActionFunctionArgs) {
       //   bookingId: booking.id,
       // });
 
-      // Guest SMS payment confirmation
+      // Tenant SMS payment confirmation
       if (booking.user.phone) {
         const message = `Dear ${booking.user.firstName} ${booking.user.lastName}, your payment of GH₵${amount.toFixed(2)} via ${method} has been received for Room ${booking.room.number} (${format(new Date(booking.checkIn), "MMM dd, yyyy")} - ${format(new Date(booking.checkOut), "MMM dd, yyyy")}). Transaction ID: ${transactionId || payment.id}. Thank you! - Platinum Apartment`;
         
@@ -361,12 +361,12 @@ export default function NewPayment() {
     </Anchor>
   ));
 
-  const bookingOptions = unpaidBookings.map(booking => ({
+  const bookingOptions = (unpaidBookings || []).map(booking => ({
     value: booking.id,
     label: `Room ${booking.room.number} - ${booking.user.firstName} ${booking.user.lastName} (GH₵ ${booking.totalAmount.toFixed(2)})`,
   }));
 
-  const paymentAccountOptions = paymentAccounts.map((account) => {
+  const paymentAccountOptions = (paymentAccounts || []).map((account) => {
     let label = `${account.provider} (${account.type.replace('_', ' ')})`;
     
     if (account.accountName) {
@@ -532,7 +532,7 @@ export default function NewPayment() {
                 <div>
                   <Group gap="xs" mb="xs">
                     <IconUser size={16} />
-                    <Text size="sm" fw={500}>Guest</Text>
+                    <Text size="sm" fw={500}>Tenant</Text>
                   </Group>
                   <Text size="sm" c="dimmed">
                     {selectedBooking.user.firstName} {selectedBooking.user.lastName}

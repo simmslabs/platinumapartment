@@ -12,6 +12,7 @@
         "@mantine/hooks": "^8.2.1",
         "@mantine/modals": "^8.2.1",
         "@mantine/notifications": "^8.2.1",
+        "@mantine/nprogress": "^8.2.7",
         "@mantine/spotlight": "^8.2.1",
         "@prisma/client": "^6.13.0",
         "@remix-run/node": "^2.16.8",
@@ -234,6 +235,8 @@
     "@mantine/modals": ["@mantine/modals@8.2.7", "", { "peerDependencies": { "@mantine/core": "8.2.7", "@mantine/hooks": "8.2.7", "react": "^18.x || ^19.x", "react-dom": "^18.x || ^19.x" } }, "sha512-btbZ4lO7S931jklBtmE6VTHUG7g4VuQLuloDxfWa21nK4X7pUjq9zvaeuYVkIVJuUxm4kXn/mMHnw57V2B6Tvw=="],
 
     "@mantine/notifications": ["@mantine/notifications@8.2.7", "", { "dependencies": { "@mantine/store": "8.2.7", "react-transition-group": "4.4.5" }, "peerDependencies": { "@mantine/core": "8.2.7", "@mantine/hooks": "8.2.7", "react": "^18.x || ^19.x", "react-dom": "^18.x || ^19.x" } }, "sha512-KXtueabwBIbgl1M5vmjzGBt88AOwhxkhmvQhEDC6UvGPtIlf4jw0BT0i3a54AKc1YwSCs0bUd91jKg5Oem2wpw=="],
+
+    "@mantine/nprogress": ["@mantine/nprogress@8.2.7", "", { "dependencies": { "@mantine/store": "8.2.7" }, "peerDependencies": { "@mantine/core": "8.2.7", "@mantine/hooks": "8.2.7", "react": "^18.x || ^19.x", "react-dom": "^18.x || ^19.x" } }, "sha512-dDeWz4YTc1EjWI4gEGHzComgdkUmj5lYxHr2mkh4Jd7ILyxHrJyi+V0VBvrQopcUYUYRRR1JOXAk67wpgkPVUQ=="],
 
     "@mantine/spotlight": ["@mantine/spotlight@8.2.7", "", { "dependencies": { "@mantine/store": "8.2.7" }, "peerDependencies": { "@mantine/core": "8.2.7", "@mantine/hooks": "8.2.7", "react": "^18.x || ^19.x", "react-dom": "^18.x || ^19.x" } }, "sha512-S6+OzJJTnTOk9mg2e0pV7vENvP+Bp5INAolbm7G2UZK+gczw30leo7xbCmmDmCtEDTgvJau2xiABtPjYOYadhg=="],
 

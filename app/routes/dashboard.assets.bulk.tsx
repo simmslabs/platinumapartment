@@ -140,7 +140,8 @@ interface AssetFormData {
 }
 
 export default function BulkAddAssets() {
-  const { user, rooms } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  const { user, rooms } = loaderData || {};
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
@@ -152,10 +153,9 @@ export default function BulkAddAssets() {
   ]);
 
   // Format rooms for the select dropdown
-  const roomOptions = rooms.map((room) => ({
+  const roomOptions = (rooms || []).map((room) => ({
     value: room.id,
-    label: `${room.number} - ${room.type.displayName} (${room.blockRelation?.name || room.block})`,
-    group: room.blockRelation?.name || room.block,
+    label: `${room.number} - ${room.type?.displayName || 'Unknown'} (${room.blockRelation?.name || room.block || 'Unknown'})`,
   }));
 
   const categoryOptions = [
@@ -256,7 +256,7 @@ export default function BulkAddAssets() {
               <Select
                 label="Room"
                 placeholder="Select a room for these assets"
-                data={roomOptions}
+                data={roomOptions || []}
                 value={selectedRoomId}
                 onChange={(value) => setSelectedRoomId(value || '')}
                 searchable

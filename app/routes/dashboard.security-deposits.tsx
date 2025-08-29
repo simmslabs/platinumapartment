@@ -511,7 +511,7 @@ export default function SecurityDeposits() {
             <Table striped highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Guest</Table.Th>
+                  <Table.Th>Tenant</Table.Th>
                   <Table.Th>Room</Table.Th>
                   <Table.Th>Amount</Table.Th>
                   <Table.Th>Account</Table.Th>
@@ -623,7 +623,7 @@ export default function SecurityDeposits() {
                 label="Booking"
                 placeholder="Select booking"
                 name="bookingId"
-                data={pendingDeposits.map(booking => ({
+                data={(pendingDeposits || []).map(booking => ({
                   value: booking.id,
                   label: `${booking.user.firstName} ${booking.user.lastName} - Room ${booking.room.number}`
                 }))}
@@ -647,7 +647,7 @@ export default function SecurityDeposits() {
                 name="paymentAccountId"
                 data={[
                   { value: "cash", label: "Cash Payment (No Account)" },
-                  ...paymentAccounts.map(account => {
+                  ...(paymentAccounts || []).map(account => {
                     const accountDisplay = account.type === 'CREDIT_CARD' || account.type === 'DEBIT_CARD' 
                       ? `${account.cardBrand} ****${account.cardLast4}` 
                       : account.type === 'BANK_ACCOUNT'
@@ -701,7 +701,7 @@ export default function SecurityDeposits() {
                   variant="light"
                 >
                   <Text size="sm">
-                    Guest: {selectedDeposit.booking.user.firstName} {selectedDeposit.booking.user.lastName}
+                    Tenant: {selectedDeposit.booking.user.firstName} {selectedDeposit.booking.user.lastName}
                   </Text>
                   <Text size="sm">
                     Room: {selectedDeposit.booking.room.number}
@@ -813,7 +813,7 @@ export default function SecurityDeposits() {
                     <Text size="sm" fw={500}>₵{selectedDeposit.amount.toLocaleString()}</Text>
                   </Group>
                   <Group justify="space-between">
-                    <Text size="sm">Refund to Guest:</Text>
+                    <Text size="sm">Refund to Tenant:</Text>
                     <Text size="sm" fw={500} c="green">₵{refundAmount.toLocaleString()}</Text>
                   </Group>
                   {deductionAmount > 0 && (

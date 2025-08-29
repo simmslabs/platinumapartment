@@ -97,7 +97,7 @@ export async function action({ request }: ActionFunctionArgs) {
               lastName: String(lastName).trim(),
               phone: phone ? String(phone).trim() : null,
               address: address ? String(address).trim() : null,
-              role: "GUEST",
+              role: "TENANT",
             },
           });
 
@@ -171,7 +171,7 @@ export async function action({ request }: ActionFunctionArgs) {
       worksheet['!cols'] = colWidths;
 
       // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Guests");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Tenants");
 
       // Generate Excel file buffer
       const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });

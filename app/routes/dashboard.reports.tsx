@@ -594,7 +594,7 @@ export default function Reports() {
               Revenue Details
             </Tabs.Tab>
             <Tabs.Tab value="guests" leftSection={<IconUsers size={16} />}>
-              Guest Balances
+              Tenant Balances
             </Tabs.Tab>
             <Tabs.Tab value="trends" leftSection={<IconTrendingUp size={16} />}>
               Trends
@@ -809,7 +809,7 @@ export default function Reports() {
           <Tabs.Panel value="guests" pt="xl">
             <Card>
               <Group justify="space-between" mb="md">
-                <Title order={3}>Guest Financial Summary</Title>
+                <Title order={3}>Tenant Financial Summary</Title>
                 <Text size="sm" c="dimmed">
                   {guestBalances.length} guests with financial activity
                 </Text>
@@ -819,7 +819,7 @@ export default function Reports() {
                 <Table striped highlightOnHover>
                   <Table.Thead>
                     <Table.Tr>
-                      <Table.Th>Guest</Table.Th>
+                      <Table.Th>Tenant</Table.Th>
                       <Table.Th>Bookings</Table.Th>
                       <Table.Th>Total Paid</Table.Th>
                       <Table.Th>Security Deposits</Table.Th>

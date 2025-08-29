@@ -64,9 +64,9 @@ async function seed() {
       password: guestPassword,
       firstName: "John",
       lastName: "Doe",
-      role: "GUEST",
+      role: "TENANT",
       phone: "+1234567893",
-      address: "123 Guest Street, City",
+      address: "123 Tenant Street, City",
     },
   });
 

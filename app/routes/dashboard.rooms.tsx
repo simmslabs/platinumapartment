@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, useNavigate, Outlet, useLocation } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useNavigate, Outlet, useLocation, useNavigation } from "@remix-run/react";
 import {
   Title,
   SimpleGrid,
@@ -16,9 +16,10 @@ import {
   Alert,
   Paper,
   Divider,
+  Checkbox,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconPlus, IconEdit, IconInfoCircle, IconFilter, IconSearch, IconTrash, IconBuilding, IconBox } from "@tabler/icons-react";
+import { IconPlus, IconEdit, IconInfoCircle, IconFilter, IconSearch, IconTrash, IconBuilding, IconBox, IconTrashX, IconAlertTriangle } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -229,6 +230,141 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ success: `Block "${blockName}" created successfully. You can now add rooms to this block.` });
     }
 
+    if (intent === "bulk-delete") {
+      const user = await requireUser(request);
+      
+      // Check if user is admin
+      if (user.role !== "ADMIN") {
+        return json({ error: "Only administrators can perform bulk delete operations" }, { status: 403 });
+      }
+
+      const roomIds = formData.getAll("roomIds") as string[];
+      const confirmation = formData.get("confirm") as string;
+      
+      if (confirmation !== "DELETE") {
+        return json({ error: "Confirmation text must be 'DELETE'" }, { status: 400 });
+      }
+
+      if (!roomIds || roomIds.length === 0) {
+        return json({ error: "No rooms selected for deletion" }, { status: 400 });
+      }
+
+      // Validate that all rooms exist (quick check without including relations)
+      const existingRooms = await db.room.findMany({
+        where: { id: { in: roomIds } },
+        select: { id: true },
+      });
+
+      if (existingRooms.length !== roomIds.length) {
+        return json({ error: "Some selected rooms were not found" }, { status: 404 });
+      }
+
+      try {
+        // For large bulk operations, process in smaller batches if needed
+        if (roomIds.length > 50) {
+          // Process in batches of 10 to avoid transaction timeouts
+          const batchSize = 10;
+          const batches = [];
+          for (let i = 0; i < roomIds.length; i += batchSize) {
+            batches.push(roomIds.slice(i, i + batchSize));
+          }
+
+          for (const batch of batches) {
+            await db.$transaction(async (tx) => {
+              // Get bookings for this batch
+              const batchBookings = await tx.booking.findMany({
+                where: { roomId: { in: batch } },
+                select: { id: true },
+              });
+              const batchBookingIds = batchBookings.map(b => b.id);
+
+              // Delete in correct order for this batch
+              if (batchBookingIds.length > 0) {
+                await tx.payment.deleteMany({
+                  where: { bookingId: { in: batchBookingIds } },
+                });
+              }
+
+              await tx.booking.deleteMany({
+                where: { roomId: { in: batch } },
+              });
+
+              await tx.roomAsset.deleteMany({
+                where: { roomId: { in: batch } },
+              });
+
+              await tx.maintenanceLog.deleteMany({
+                where: { roomId: { in: batch } },
+              });
+
+              await tx.room.deleteMany({
+                where: { id: { in: batch } },
+              });
+            }, {
+              timeout: 15000, // 15 second timeout per batch
+            });
+          }
+        } else {
+          // For smaller operations, process all at once
+          await db.$transaction(async (tx) => {
+            // Collect all booking IDs first
+            const allBookings = await tx.booking.findMany({
+              where: { roomId: { in: roomIds } },
+              select: { id: true },
+            });
+            const allBookingIds = allBookings.map(b => b.id);
+
+            // Bulk delete operations (more efficient than looping)
+            
+            // 1. Delete all payments for all bookings at once
+            if (allBookingIds.length > 0) {
+              await tx.payment.deleteMany({
+                where: { bookingId: { in: allBookingIds } },
+              });
+            }
+
+            // 2. Delete all bookings for all rooms at once
+            await tx.booking.deleteMany({
+              where: { roomId: { in: roomIds } },
+            });
+
+            // 3. Delete all room assets for all rooms at once
+            await tx.roomAsset.deleteMany({
+              where: { roomId: { in: roomIds } },
+            });
+
+            // 4. Delete all maintenance logs for all rooms at once
+            await tx.maintenanceLog.deleteMany({
+              where: { roomId: { in: roomIds } },
+            });
+
+            // 5. Finally delete all rooms at once
+            await tx.room.deleteMany({
+              where: { id: { in: roomIds } },
+            });
+          }, {
+            timeout: 30000, // 30 second timeout
+          });
+        }
+
+        return json({ success: `Successfully deleted ${roomIds.length} room(s)` });
+      } catch (error) {
+        console.error("Bulk delete error:", error);
+        
+        // Handle specific Prisma transaction errors
+        if (error && typeof error === 'object' && 'code' in error) {
+          if (error.code === 'P2028') {
+            return json({ error: "Transaction timeout. Please try selecting fewer rooms or try again." }, { status: 500 });
+          }
+          if (error.code === 'P2034') {
+            return json({ error: "Transaction conflict. Please try again." }, { status: 500 });
+          }
+        }
+        
+        return json({ error: "Failed to delete rooms. Please try again with fewer rooms selected." }, { status: 500 });
+      }
+    }
+
     return json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {
     console.error("Room action error:", error);
@@ -250,11 +386,19 @@ export default function Rooms() {
   const navigate = useNavigate();
   const [blockModalOpened, { open: openBlockModal, close: closeBlockModal }] = useDisclosure(false);
   const [assetsModalOpened, { open: openAssetsModal, close: closeAssetsModal }] = useDisclosure(false);
+  const [bulkDeleteModalOpened, { open: openBulkDeleteModal, close: closeBulkDeleteModal }] = useDisclosure(false);
   const [editingBlock, setEditingBlock] = useState<string | null>(null);
   const [deletingBlock, setDeletingBlock] = useState<string | null>(null);
   const [creatingBlock, setCreatingBlock] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<(typeof rooms)[0] | null>(null);
+  const [selectedRooms, setSelectedRooms] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirmation, setBulkDeleteConfirmation] = useState("");
   const location = useLocation();
+  const navigation = useNavigation();
+  
+  // Check if we're currently submitting a bulk delete
+  const isBulkDeleting = navigation.state === "submitting" && 
+    navigation.formData?.get("_action") === "bulkDelete";
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -283,9 +427,10 @@ export default function Rooms() {
 
   // Get unique values for filter options
   const filterOptions = useMemo(() => {
-    const blocks = [...new Set(rooms.map(room => room.block))].sort();
-    const floors = [...new Set(rooms.map(room => room.floor))].sort((a, b) => a - b);
-    const capacities = [...new Set(rooms.map(room => room.capacity))].sort((a, b) => a - b);
+    const safeRooms = rooms || [];
+    const blocks = [...new Set(safeRooms.map(room => room.block))].sort();
+    const floors = [...new Set(safeRooms.map(room => room.floor))].sort((a, b) => a - b);
+    const capacities = [...new Set(safeRooms.map(room => room.capacity))].sort((a, b) => a - b);
     
     return {
       blocks: blocks.map(block => ({ value: block, label: `Block ${block}` })),
@@ -296,8 +441,9 @@ export default function Rooms() {
 
   // Get block statistics
   const blockStats = useMemo(() => {
-    return filterOptions.blocks.map(blockOption => {
-      const blockRooms = rooms.filter(room => room.block === blockOption.value);
+    const safeRooms = rooms || [];
+    return (filterOptions.blocks || []).map(blockOption => {
+      const blockRooms = safeRooms.filter(room => room.block === blockOption.value);
       const available = blockRooms.filter(room => room.status === 'AVAILABLE').length;
       const occupied = blockRooms.filter(room => room.status === 'OCCUPIED').length;
       const maintenance = blockRooms.filter(room => room.status === 'MAINTENANCE').length;
@@ -361,6 +507,51 @@ export default function Rooms() {
   };
 
   const hasActiveFilters = searchQuery || statusFilter || typeFilter || blockFilter || floorFilter || capacityFilter;
+
+  // Bulk selection handlers
+  const handleSelectRoom = (roomId: string, checked: boolean) => {
+    const newSelected = new Set(selectedRooms);
+    if (checked) {
+      newSelected.add(roomId);
+    } else {
+      newSelected.delete(roomId);
+    }
+    setSelectedRooms(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedRooms(new Set(filteredRooms.map(room => room.id)));
+    } else {
+      setSelectedRooms(new Set());
+    }
+  };
+
+  const isAllSelected = filteredRooms.length > 0 && selectedRooms.size === filteredRooms.length;
+  const isIndeterminate = selectedRooms.size > 0 && selectedRooms.size < filteredRooms.length;
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedRooms(new Set());
+  }, [searchQuery, statusFilter, typeFilter, blockFilter, floorFilter, capacityFilter]);
+
+  const handleBulkDelete = () => {
+    setBulkDeleteConfirmation("");
+    openBulkDeleteModal();
+  };
+
+  // Reset confirmation text when modal closes
+  const handleBulkDeleteModalClose = () => {
+    setBulkDeleteConfirmation("");
+    closeBulkDeleteModal();
+  };
+
+  // Handle modal close with deletion check
+  const handleModalClose = () => {
+    if (!isBulkDeleting) {
+      handleBulkDeleteModalClose();
+    }
+  };
 
   // Close modals on successful action
   useEffect(() => {
@@ -588,7 +779,7 @@ export default function Rooms() {
             
             <Select
                 placeholder="All Types"
-                data={roomTypes.map(type => ({ value: type.id, label: type.displayName }))}
+                data={(roomTypes || []).map(type => ({ value: type.id, label: type.displayName }))}
                 value={typeFilter}
                 onChange={setTypeFilter}
                 clearable
@@ -596,7 +787,7 @@ export default function Rooms() {
             
             <Select
                 placeholder="All Blocks"
-                data={filterOptions.blocks}
+                data={filterOptions.blocks || []}
                 value={blockFilter}
                 onChange={setBlockFilter}
                 clearable
@@ -604,15 +795,15 @@ export default function Rooms() {
             
             <Select
                 placeholder="All Floors"
-                data={filterOptions.floors}
+                data={filterOptions.floors || []}
                 value={floorFilter}
                 onChange={setFloorFilter}
                 clearable
               />
-            
+
             <Select
                 placeholder="All Capacities"
-                data={filterOptions.capacities}
+                data={filterOptions.capacities || []}
                 value={capacityFilter}
                 onChange={setCapacityFilter}
                 clearable
@@ -622,9 +813,42 @@ export default function Rooms() {
           <Divider my="md" />
           
           <Group justify="space-between">
-            <Text size="sm" c="dimmed">
-              Showing {filteredRooms.length} of {rooms.length} rooms
-            </Text>
+            <Group>
+              <Text size="sm" c="dimmed">
+                Showing {filteredRooms.length} of {rooms.length} rooms
+              </Text>
+              {user?.role === "ADMIN" && filteredRooms.length > 0 && (
+                <Checkbox
+                  label="Select All"
+                  checked={isAllSelected}
+                  indeterminate={isIndeterminate}
+                  onChange={(event) => handleSelectAll(event.currentTarget.checked)}
+                />
+              )}
+              {user?.role === "ADMIN" && selectedRooms.size > 0 && (
+                <Group gap="xs">
+                  <Badge variant="light" color="red">
+                    {selectedRooms.size} selected
+                  </Badge>
+                  <Button
+                    size="compact-sm"
+                    color="red"
+                    variant="light"
+                    leftSection={<IconTrashX size={14} />}
+                    onClick={handleBulkDelete}
+                  >
+                    Bulk Delete
+                  </Button>
+                  <Button
+                    size="compact-sm"
+                    variant="subtle"
+                    onClick={() => setSelectedRooms(new Set())}
+                  >
+                    Clear Selection
+                  </Button>
+                </Group>
+              )}
+            </Group>
             {hasActiveFilters && (
               <Badge variant="light" color="blue">
                 {[searchQuery && "Search", statusFilter && "Status", typeFilter && "Type", 
@@ -691,9 +915,19 @@ export default function Rooms() {
                       shadow="sm" 
                       p="lg" 
                       h="100%" 
-                      style={{ cursor: 'pointer', '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.15)' } }}
+                      style={{ cursor: 'pointer', position: 'relative' }}
                       onClick={() => navigate(`/dashboard/rooms/${room.id}`)}
                     >
+                      {user?.role === "ADMIN" && (
+                        <Checkbox
+                          checked={selectedRooms.has(room.id)}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            handleSelectRoom(room.id, event.currentTarget.checked);
+                          }}
+                          style={{ position: 'absolute', top: 12, right: 12, zIndex: 1 }}
+                        />
+                      )}
                         <Group justify="space-between" mb="md">
                           <Text fw={600} size="lg">
                             Room {room.number}
@@ -1062,6 +1296,120 @@ export default function Rooms() {
               </Group>
             </Stack>
           )}
+        </Modal>
+
+        {/* Bulk Delete Modal */}
+        <Modal
+          opened={bulkDeleteModalOpened}
+          onClose={handleModalClose}
+          title="Bulk Delete Rooms"
+          size="md"
+          closeOnClickOutside={!isBulkDeleting}
+          closeOnEscape={!isBulkDeleting}
+        >
+          <Form method="post">
+            <input type="hidden" name="intent" value="bulk-delete" />
+            {Array.from(selectedRooms).map(roomId => (
+              <input key={roomId} type="hidden" name="roomIds" value={roomId} />
+            ))}
+            
+            <Stack>
+              <Alert
+                icon={<IconAlertTriangle size={16} />}
+                title="Warning: This action cannot be undone"
+                color="red"
+              >
+                <Stack gap={4}>
+                  <Text>
+                    You are about to permanently delete {selectedRooms.size} room(s) and all associated data including:
+                  </Text>
+                  <ul>
+                    <li>All bookings and payment records</li>
+                    <li>All assigned assets</li>
+                    <li>All maintenance logs</li>
+                    <li>All guest data for these rooms</li>
+                  </ul>
+                  <Text>
+                    This is a force delete operation that will bypass all safety checks.
+                  </Text>
+                  <Text fw={600} c="red" mt="sm">
+                    To proceed, you must type exactly &quot;DELETE&quot; (all capitals) in the field below.
+                  </Text>
+                </Stack>
+              </Alert>
+
+              <TextInput
+                label={
+                  <Group gap={4}>
+                    <Text fw={600} c="red">Type DELETE to confirm</Text>
+                    <Text size="xs" c="dimmed">(case sensitive)</Text>
+                  </Group>
+                }
+                description={
+                  <Group justify="space-between">
+                    <Text size="xs" c="dimmed">
+                      Must match exactly: DELETE
+                    </Text>
+                    <Text 
+                      size="xs" 
+                      c={bulkDeleteConfirmation === "DELETE" ? "green" : "dimmed"}
+                    >
+                      {bulkDeleteConfirmation.length}/6 characters
+                    </Text>
+                  </Group>
+                }
+                placeholder="DELETE"
+                name="confirm"
+                value={bulkDeleteConfirmation}
+                onChange={(event) => setBulkDeleteConfirmation(event.currentTarget.value)}
+                error={
+                  bulkDeleteConfirmation.length > 0 && bulkDeleteConfirmation !== "DELETE" 
+                    ? `Must type exactly "DELETE" (you typed "${bulkDeleteConfirmation}")` 
+                    : undefined
+                }
+                styles={{
+                  input: {
+                    fontFamily: 'monospace',
+                    backgroundColor: bulkDeleteConfirmation === "DELETE" ? 'var(--mantine-color-green-0)' : undefined,
+                    borderColor: bulkDeleteConfirmation === "DELETE" ? 'var(--mantine-color-green-6)' : undefined,
+                  }
+                }}
+                rightSection={
+                  bulkDeleteConfirmation === "DELETE" ? (
+                    <Text c="green" size="lg">✓</Text>
+                  ) : null
+                }
+                required
+              />
+
+              <Group justify="flex-end">
+                <Button 
+                  variant="outline" 
+                  onClick={handleBulkDeleteModalClose}
+                  disabled={isBulkDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  color="red"
+                  disabled={bulkDeleteConfirmation !== "DELETE" || isBulkDeleting}
+                  loading={isBulkDeleting}
+                  leftSection={!isBulkDeleting ? <IconTrashX size={16} /> : undefined}
+                  style={{
+                    opacity: bulkDeleteConfirmation !== "DELETE" ? 0.5 : 1,
+                  }}
+                >
+                  {isBulkDeleting
+                    ? "Deleting..."
+                    : bulkDeleteConfirmation === "DELETE" 
+                      ? `✓ Delete ${selectedRooms.size} Room(s)` 
+                      : `Delete ${selectedRooms.size} Room(s)`
+                  }
+                </Button>
+              </Group>
+            </Stack>
+          </Form>
         </Modal>
       </Stack>
     </DashboardLayout>

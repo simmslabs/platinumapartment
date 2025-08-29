@@ -85,7 +85,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     db.user.count({
       where: {
         createdAt: { gte: currentMonth, lt: nextMonth },
-        role: "GUEST",
+        role: "TENANT",
       },
     }),
     
@@ -107,7 +107,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Overall
     db.room.count(),
     db.room.count({ where: { status: "OCCUPIED" } }),
-    db.user.count({ where: { role: "GUEST" } }),
+    db.user.count({ where: { role: "TENANT" } }),
     db.review.aggregate({ _avg: { rating: true } }),
     
     // Room type stats

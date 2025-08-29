@@ -410,7 +410,7 @@ export default function RoomDetails() {
                   <ThemeIcon size="lg" variant="light" color="green">
                     <IconUsers size={24} />
                   </ThemeIcon>
-                  <Text fw={600}>Current Guest</Text>
+                  <Text fw={600}>Current Tenant</Text>
                 </Group>
 
                 {analytics.currentGuest ? (
@@ -559,7 +559,7 @@ export default function RoomDetails() {
 
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl">
             <Card shadow="sm" p="lg">
-              <Title order={4} mb="md">Top Guests</Title>
+              <Title order={4} mb="md">Top Tenants</Title>
               {analytics.topGuests.length > 0 ? (
                 <Stack gap="md">
                   {analytics.topGuests.map((guest) => (
