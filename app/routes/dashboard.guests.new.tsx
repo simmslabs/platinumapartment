@@ -98,9 +98,8 @@ export async function action({ request }: ActionFunctionArgs) {
     errors.lastName = "Last name is required";
   }
 
-  if (!email?.trim()) {
-    errors.email = "Email is required";
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  // Email is optional, but if provided, it must be valid format
+  if (email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     errors.email = "Invalid email format";
   }
 
@@ -108,13 +107,8 @@ export async function action({ request }: ActionFunctionArgs) {
     errors.phone = "Phone number is required";
   }
 
-  if (!idCard?.trim()) {
-    errors.idCard = "ID card number is required";
-  }
-
-  if (!gender?.trim()) {
-    errors.gender = "Gender is required";
-  }
+  // ID Card Number is optional
+  // Gender is optional
 
   if (Object.keys(errors).length > 0) {
     return json({ errors, success: false }, { status: 400 });
@@ -141,19 +135,21 @@ export async function action({ request }: ActionFunctionArgs) {
         );
       }
 
-      // Check if email is taken by another user
-      const existingUser = await db.user.findFirst({
-        where: {
-          email: email.trim().toLowerCase(),
-          NOT: { id: guestId }
-        },
-      });
+      // Check if email is taken by another user (only if email is provided)
+      if (email?.trim()) {
+        const existingUser = await db.user.findFirst({
+          where: {
+            email: email.trim().toLowerCase(),
+            NOT: { id: guestId }
+          },
+        });
 
-      if (existingUser) {
-        return json(
-          { errors: { email: "A user with this email already exists" }, success: false },
-          { status: 400 }
-        );
+        if (existingUser) {
+          return json(
+            { errors: { email: "A user with this email already exists" }, success: false },
+            { status: 400 }
+          );
+        }
       }
 
       // Check if ID card number is taken by another user
@@ -199,7 +195,7 @@ export async function action({ request }: ActionFunctionArgs) {
         data: {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
-          email: email.trim().toLowerCase(),
+          email: email?.trim() ? email.trim().toLowerCase() : "",
           phone: phone.trim(),
           address: address?.trim() || null,
           idCard: idCard?.trim() || null,
@@ -211,16 +207,20 @@ export async function action({ request }: ActionFunctionArgs) {
       return redirect(`/dashboard/guests/${updatedGuest.id}?success=updated`);
     } else {
       // Creating new guest
-      // Check if user already exists
-      const existingUser = await db.user.findUnique({
-        where: { email: email.trim().toLowerCase() },
-      });
+      // Check if user already exists (only if email is provided)
+      if (email?.trim()) {
+        const existingUser = await db.user.findFirst({
+          where: { 
+            email: email.trim().toLowerCase(),
+          },
+        });
 
-      if (existingUser) {
-        return json(
-          { errors: { email: "A user with this email already exists" }, success: false },
-          { status: 400 }
-        );
+        if (existingUser) {
+          return json(
+            { errors: { email: "A user with this email already exists" }, success: false },
+            { status: 400 }
+          );
+        }
       }
 
       // Check if ID card number already exists
@@ -266,7 +266,7 @@ export async function action({ request }: ActionFunctionArgs) {
         data: {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
-          email: email.trim().toLowerCase(),
+          email: email?.trim() ? email.trim().toLowerCase() : "",
           password: hashedPassword,
           phone: phone.trim(),
           address: address?.trim() || null,
@@ -325,13 +325,15 @@ export default function NewGuestPage() {
       firstName: (value) => (!value?.trim() ? "First name is required" : null),
       lastName: (value) => (!value?.trim() ? "Last name is required" : null),
       email: (value) => {
-        if (!value?.trim()) return "Email is required";
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Invalid email format";
+        // Email is optional, but if provided, it must be valid format
+        if (value?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          return "Invalid email format";
+        }
         return null;
       },
       phone: (value) => (!value?.trim() ? "Phone number is required" : null),
-      idCard: (value) => (!value?.trim() ? "ID card number is required" : null),
-      gender: (value) => (!value?.trim() ? "Gender is required" : null),
+      idCard: () => null, // ID Card is optional
+      gender: () => null, // Gender is optional
     },
   });
 
@@ -502,7 +504,7 @@ export default function NewGuestPage() {
                   <TextInput
                     label="Email Address"
                     type="email"
-                    required
+                    placeholder="Enter email address (optional)"
                     {...form.getInputProps("email")}
                     error={getFieldError("email")}
                   />
@@ -522,8 +524,7 @@ export default function NewGuestPage() {
                 <Grid.Col span={6}>
                   <TextInput
                     label="ID Card Number"
-                    required
-                    placeholder="e.g., GHA-123456789-0"
+                    placeholder="e.g., GHA-123456789-0 (optional)"
                     {...form.getInputProps("idCard")}
                     error={getFieldError("idCard")}
                   />
@@ -531,8 +532,7 @@ export default function NewGuestPage() {
                 <Grid.Col span={6}>
                   <Select
                     label="Gender"
-                    required
-                    placeholder="Select gender"
+                    placeholder="Select gender (optional)"
                     data={[
                       { value: "MALE", label: "Male" },
                       { value: "FEMALE", label: "Female" },
