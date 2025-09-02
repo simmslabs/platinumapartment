@@ -24,9 +24,10 @@ import { useDisclosure } from "@mantine/hooks";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Booking, BookingStatus, RoomStatus } from "@prisma/client";
+import type { Booking, BookingStatus } from "@prisma/client";
 import { emailService } from "~/utils/email.server";
 import { mnotifyService } from "~/utils/mnotify.server";
+import { updateRoomStatus } from "~/utils/room-status.server";
 import { useState, useMemo } from "react";
 
 // Type for booking with related data (matching the loader query)
@@ -264,6 +265,18 @@ export async function action({ request }: ActionFunctionArgs) {
 
       console.log("Booking created successfully:", newBooking.id);
 
+      // Update room status if the booking is currently active
+      const now = new Date();
+      if (newBooking.status === "CHECKED_IN" || 
+          ((newBooking.status === "CONFIRMED" || newBooking.status === "PENDING") && 
+           checkIn <= now && finalCheckOut > now)) {
+        await db.room.update({
+          where: { id: roomId },
+          data: { status: "OCCUPIED" },
+        });
+        console.log(`Room status updated to OCCUPIED for booking ${newBooking.id}`);
+      }
+
       // Send booking confirmation email and SMS (don't block the response if email/SMS fails)
       try {
         await emailService.sendBookingConfirmation({
@@ -348,15 +361,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
       // Update room status based on booking status
       if (bookingWithDetails) {
-        let roomStatus = "AVAILABLE";
-        if (status === "CHECKED_IN") {
-          roomStatus = "OCCUPIED";
-        }
-        
-        await db.room.update({
-          where: { id: bookingWithDetails.roomId },
-          data: { status: roomStatus as RoomStatus },
-        });
+        // Use the utility function to properly update room status
+        await updateRoomStatus(bookingWithDetails.roomId);
+        console.log(`Room status updated for room ${bookingWithDetails.roomId} after booking status change`);
       }
 
       // Send SMS notifications for all booking status changes

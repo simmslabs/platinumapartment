@@ -20,6 +20,7 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconPlus, IconEdit, IconInfoCircle, IconFilter, IconSearch, IconTrash, IconBuilding, IconBox, IconTrashX, IconAlertTriangle } from "@tabler/icons-react";
+import { format } from "date-fns";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -47,6 +48,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
         orderBy: [
           { assignedAt: "asc" }, // Order by when asset was assigned
         ]
+      },
+      bookings: {
+        where: {
+          status: { in: ["CHECKED_IN", "CONFIRMED", "PENDING"] },
+        },
+        select: {
+          id: true,
+          status: true,
+          checkIn: true,
+          checkOut: true,
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+            }
+          }
+        },
+        orderBy: {
+          checkIn: "desc",
+        },
+        take: 1, // Get the most recent active booking
       },
     },
     orderBy: { number: "asc" },
@@ -954,6 +976,39 @@ export default function Rooms() {
                           <Text size="sm">
                             <strong>Price:</strong> {formatPriceWithPeriod(room.pricePerNight, room.pricingPeriod || "NIGHT")}
                           </Text>
+                          
+                          {/* Current Tenant Info */}
+                          {room.bookings && room.bookings.length > 0 && (() => {
+                            const now = new Date();
+                            const currentBooking = room.bookings.find(booking => {
+                              if (booking.status === "CHECKED_IN") return true;
+                              if ((booking.status === "CONFIRMED" || booking.status === "PENDING") && 
+                                  booking.checkIn <= now && booking.checkOut > now) return true;
+                              return false;
+                            });
+                            
+                            if (currentBooking) {
+                              return (
+                                <Paper p="xs" mt="xs" withBorder>
+                                  <Text size="xs" fw={600} c="blue">Current Tenant:</Text>
+                                  <Text size="xs">{currentBooking.user.firstName} {currentBooking.user.lastName}</Text>
+                                  <Text size="xs" c="dimmed">
+                                    Until {format(new Date(currentBooking.checkOut), "MMM dd, yyyy")}
+                                  </Text>
+                                  <Badge size="xs" color="green">{currentBooking.status}</Badge>
+                                </Paper>
+                              );
+                            } else if (room.status === "OCCUPIED") {
+                              return (
+                                <Paper p="xs" mt="xs" withBorder bg="orange.0">
+                                  <Text size="xs" fw={600} c="orange">Status Mismatch:</Text>
+                                  <Text size="xs" c="orange">Room marked as occupied but no active booking found</Text>
+                                </Paper>
+                              );
+                            }
+                            return null;
+                          })()}
+                          
                           {room.description && (
                             <Text size="sm" c="dimmed">
                               {room.description}

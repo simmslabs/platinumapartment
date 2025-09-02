@@ -240,6 +240,18 @@ export async function action({ request }: ActionFunctionArgs) {
 
     console.log("Booking created successfully:", newBooking.id);
 
+    // Update room status based on the new booking
+    const now = new Date();
+    if (newBooking.status === "CHECKED_IN" || 
+        ((newBooking.status === "CONFIRMED" || newBooking.status === "PENDING") && 
+         checkIn <= now && checkOut > now)) {
+      await db.room.update({
+        where: { id: roomId },
+        data: { status: "OCCUPIED" },
+      });
+      console.log(`Room ${newBooking.room.number} status updated to OCCUPIED`);
+    }
+
     // Send confirmation emails
     try {
       // Tenant confirmation email

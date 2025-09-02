@@ -149,10 +149,39 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Current guest (if any)
   const currentGuest = room.bookings.find(
-    (booking) =>
-      booking.status === "CHECKED_IN" ||
-      (booking.status === "CONFIRMED" && booking.checkIn <= now && booking.checkOut > now)
+    (booking) => {
+      // For CHECKED_IN status, they're definitely current
+      if (booking.status === "CHECKED_IN") {
+        return true;
+      }
+      
+      // For CONFIRMED and PENDING, check if they're within the stay period
+      if ((booking.status === "CONFIRMED" || booking.status === "PENDING") && 
+          booking.checkIn <= now && booking.checkOut > now) {
+        return true;
+      }
+      
+      return false;
+    }
   );
+
+  // Debug logging (remove in production)
+  if (process.env.NODE_ENV === "development") {
+    console.log(`Room ${room.number} - Debug Info:`);
+    console.log(`  Total bookings: ${room.bookings.length}`);
+    console.log(`  Current time: ${now.toISOString()}`);
+    if (room.bookings.length > 0) {
+      console.log(`  Recent bookings:`);
+      room.bookings.slice(0, 3).forEach((booking, i) => {
+        console.log(`    ${i + 1}. ${booking.user.firstName} ${booking.user.lastName}`);
+        console.log(`       Status: ${booking.status}`);
+        console.log(`       Check-in: ${booking.checkIn.toISOString()}`);
+        console.log(`       Check-out: ${booking.checkOut.toISOString()}`);
+        console.log(`       Is current: ${booking === currentGuest}`);
+      });
+    }
+    console.log(`  Current guest found: ${currentGuest ? 'Yes' : 'No'}`);
+  }
 
   // Top guests (by number of bookings)
   interface GuestStat {
@@ -437,9 +466,57 @@ export default function RoomDetails() {
                     </Badge>
                   </Stack>
                 ) : (
-                  <Text c="dimmed" ta="center" py="xl">
-                    No current guest
-                  </Text>
+                  <Stack gap="xs">
+                    <Text c="dimmed" ta="center" py="md">
+                      No current tenant
+                    </Text>
+                    {room.bookings.length > 0 && (
+                      <div>
+                        <Text size="xs" c="dimmed" mb="xs">Last tenant:</Text>
+                        {(() => {
+                          const lastBooking = room.bookings
+                            .filter(b => ["CHECKED_OUT", "CANCELLED"].includes(b.status))
+                            .sort((a, b) => new Date(b.checkOut).getTime() - new Date(a.checkOut).getTime())[0];
+                          
+                          if (lastBooking) {
+                            return (
+                              <Text size="xs" c="dimmed">
+                                {lastBooking.user.firstName} {lastBooking.user.lastName} 
+                                <br />
+                                ({format(new Date(lastBooking.checkOut), "MMM dd, yyyy")})
+                              </Text>
+                            );
+                          }
+                          
+                          // Check for any recent bookings regardless of status
+                          const recentBooking = room.bookings[0];
+                          if (recentBooking) {
+                            return (
+                              <Text size="xs" c="dimmed">
+                                {recentBooking.user.firstName} {recentBooking.user.lastName}
+                                <br />
+                                Status: {recentBooking.status}
+                                <br />
+                                Check-out: {format(new Date(recentBooking.checkOut), "MMM dd, yyyy")}
+                              </Text>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
+                      </div>
+                    )}
+                    <Button
+                      variant="light"
+                      size="xs"
+                      leftSection={<IconPlus size={14} />}
+                      component={Link}
+                      to={`/dashboard/bookings/new?roomId=${room.id}`}
+                      mt="md"
+                    >
+                      Add New Tenant
+                    </Button>
+                  </Stack>
                 )}
               </Card>
             </Grid.Col>
