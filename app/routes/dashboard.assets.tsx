@@ -26,9 +26,6 @@ import {
   IconSearch,
   IconPlus,
   IconAlertTriangle,
-  IconCalendar,
-  IconTools,
-  IconEye,
   IconEdit,
 } from "@tabler/icons-react";
 import DashboardLayout from "~/components/DashboardLayout";
@@ -343,7 +340,15 @@ export default function AssetsManagement() {
                             {getCategoryIcon(asset.category)}
                           </Avatar>
                           <div>
-                            <Text fw={500} size="sm">{asset.name}</Text>
+                            <Anchor
+                              component={Link}
+                              to={`/dashboard/assets/${asset.id}`}
+                              fw={500}
+                              size="sm"
+                              c="dark"
+                            >
+                              {asset.name}
+                            </Anchor>
                             {asset.description && (
                               <Text size="xs" c="dimmed" lineClamp={2}>
                                 {asset.description}
@@ -437,41 +442,6 @@ export default function AssetsManagement() {
                               size="sm"
                             >
                               <IconEdit size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-
-                          {asset.roomAssignments.length > 0 && (
-                            <Tooltip label={`View ${asset.roomAssignments.length === 1 ? 'Room' : 'Rooms'}`}>
-                              <ActionIcon
-                                component={Link}
-                                to={`/dashboard/rooms/${asset.roomAssignments[0].room.id}`}
-                                variant="light"
-                                size="sm"
-                              >
-                                <IconEye size={14} />
-                              </ActionIcon>
-                            </Tooltip>
-                          )}
-                          
-                          <Tooltip label="Create Maintenance Task">
-                            <ActionIcon
-                              component={Link}
-                              to={`/dashboard/maintenance/new?assetId=${asset.id}`}
-                              variant="light"
-                              color="orange"
-                              size="sm"
-                            >
-                              <IconTools size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-                          
-                          <Tooltip label="Schedule Inspection">
-                            <ActionIcon
-                              variant="light"
-                              color="blue"
-                              size="sm"
-                            >
-                              <IconCalendar size={14} />
                             </ActionIcon>
                           </Tooltip>
                         </Group>
