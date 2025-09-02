@@ -385,7 +385,6 @@ export default function NewBooking() {
                     }
                   }}
                   required
-                  minDate={new Date()}
                   valueFormat="YYYY-MM-DD"
                 />
                 <NumberInput
