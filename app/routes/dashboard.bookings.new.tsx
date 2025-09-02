@@ -22,6 +22,7 @@ import { format, differenceInDays } from "date-fns";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
+import { RoomStatus } from "@prisma/client";
 import { mnotifyService } from "~/utils/mnotify.server";
 import { useState, useEffect, useMemo } from "react";
 
@@ -95,6 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const guestId = url.searchParams.get("guestId");
   const rebookFromId = url.searchParams.get("rebookFromId");
+  const roomId = url.searchParams.get("roomId"); // Add support for pre-selected room
 
   // Get all guests for the dropdown
   const guests = await db.user.findMany({
@@ -122,6 +124,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
+  // If roomId is provided, get the specific room
+  let preSelectedRoom = null;
+  if (roomId) {
+    preSelectedRoom = await db.room.findUnique({
+      where: { id: roomId },
+      include: {
+        blockRelation: true,
+        type: true,
+      },
+    });
+  }
+
   // If rebookFromId is provided, get the original booking details
   let originalBooking = null;
   if (rebookFromId) {
@@ -139,16 +153,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Get available rooms (not currently occupied)
-  // If rebooking, also include the original room even if it's not marked as available
-  const roomWhereClause = rebookFromId && originalBooking
-    ? {
-        OR: [
-          { status: "AVAILABLE" },
-          { id: originalBooking.room.id }
-        ]
-      }
-    : { status: "AVAILABLE" };
+  // Get available rooms with logic to include pre-selected rooms
+  let roomWhereClause;
+  if (rebookFromId && originalBooking) {
+    // Include original room for rebooking
+    roomWhereClause = {
+      OR: [
+        { status: RoomStatus.AVAILABLE },
+        { id: originalBooking.room.id }
+      ]
+    };
+  } else if (roomId && preSelectedRoom) {
+    // Include pre-selected room even if not available
+    roomWhereClause = {
+      OR: [
+        { status: RoomStatus.AVAILABLE },
+        { id: roomId }
+      ]
+    };
+  } else {
+    // Only available rooms
+    roomWhereClause = { status: RoomStatus.AVAILABLE };
+  }
 
   const rooms = await db.room.findMany({
     where: roomWhereClause,
@@ -159,7 +185,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { number: "asc" },
   });
 
-  return json({ user, guests, rooms, selectedGuest, guestId, originalBooking, rebookFromId });
+  return json({ 
+    user, 
+    guests, 
+    rooms, 
+    selectedGuest, 
+    guestId, 
+    originalBooking, 
+    rebookFromId,
+    preSelectedRoom,
+    roomId 
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -292,13 +328,22 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function NewBooking() {
-  const { user, guests, rooms, selectedGuest, guestId, originalBooking } = useLoaderData<typeof loader>();
+  const { 
+    user, 
+    guests, 
+    rooms, 
+    selectedGuest, 
+    guestId, 
+    originalBooking, 
+    preSelectedRoom, 
+    roomId 
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
   // Form state
   const [selectedUserId, setSelectedUserId] = useState(guestId || "");
-  const [selectedRoom, setSelectedRoom] = useState("");
+  const [selectedRoom, setSelectedRoom] = useState(roomId || "");
   const [checkInDate, setCheckInDate] = useState<Date | null>(null);
   const [numberOfPeriods, setNumberOfPeriods] = useState(1);
 
@@ -308,6 +353,13 @@ export default function NewBooking() {
       setSelectedUserId(selectedGuest.id);
     }
   }, [selectedGuest]);
+
+  // Set the pre-selected room if coming with roomId parameter
+  useEffect(() => {
+    if (roomId && preSelectedRoom) {
+      setSelectedRoom(roomId);
+    }
+  }, [roomId, preSelectedRoom]);
 
   // Pre-fill form data if rebooking from an existing booking
   useEffect(() => {
@@ -348,7 +400,8 @@ export default function NewBooking() {
     };
   }, [selectedRoom, checkInDate, numberOfPeriods, rooms]);
 
-  const availableRooms = rooms.filter(room => room.status === "AVAILABLE");
+  // Use all rooms from loader (already filtered to include available + pre-selected)
+  const availableRooms = rooms;
 
   const breadcrumbItems = [
     { title: "Dashboard", href: "/dashboard" },
