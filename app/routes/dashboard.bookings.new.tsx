@@ -18,7 +18,7 @@ import {
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { IconArrowLeft, IconDeviceFloppy, IconInfoCircle } from "@tabler/icons-react";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -94,6 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const guestId = url.searchParams.get("guestId");
+  const rebookFromId = url.searchParams.get("rebookFromId");
 
   // Get all guests for the dropdown
   const guests = await db.user.findMany({
@@ -105,18 +106,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       email: true 
     },
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-  });
-
-  // Get available rooms (not currently occupied)
-  const rooms = await db.room.findMany({
-    where: {
-      status: "AVAILABLE",
-    },
-    include: {
-      blockRelation: true,
-      type: true,
-    },
-    orderBy: { number: "asc" },
   });
 
   // If guestId is provided, get the specific guest
@@ -133,7 +122,44 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  return json({ user, guests, rooms, selectedGuest, guestId });
+  // If rebookFromId is provided, get the original booking details
+  let originalBooking = null;
+  if (rebookFromId) {
+    originalBooking = await db.booking.findUnique({
+      where: { id: rebookFromId },
+      include: {
+        room: {
+          include: {
+            blockRelation: true,
+            type: true,
+          },
+        },
+        user: true,
+      },
+    });
+  }
+
+  // Get available rooms (not currently occupied)
+  // If rebooking, also include the original room even if it's not marked as available
+  const roomWhereClause = rebookFromId && originalBooking
+    ? {
+        OR: [
+          { status: "AVAILABLE" },
+          { id: originalBooking.room.id }
+        ]
+      }
+    : { status: "AVAILABLE" };
+
+  const rooms = await db.room.findMany({
+    where: roomWhereClause,
+    include: {
+      blockRelation: true,
+      type: true,
+    },
+    orderBy: { number: "asc" },
+  });
+
+  return json({ user, guests, rooms, selectedGuest, guestId, originalBooking, rebookFromId });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -147,6 +173,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const numberOfPeriodsStr = formData.get("numberOfPeriods") as string;
     const guestsStr = formData.get("guests") as string;
     const specialRequests = formData.get("specialRequests") as string;
+    const rebookFromId = formData.get("rebookFromId") as string;
 
     if (!userId || !roomId || !checkInStr || !numberOfPeriodsStr || !guestsStr) {
       return json({ error: "All required fields must be filled" }, { status: 400 });
@@ -172,6 +199,26 @@ export async function action({ request }: ActionFunctionArgs) {
     // Calculate checkout date and total amount
     const checkOut = calculateCheckoutDate(checkIn, numberOfPeriods, room.pricingPeriod || 'NIGHT');
     const totalAmount = room.pricePerNight * numberOfPeriods;
+
+    // If this is a rebooking and the room is the same, checkout the old booking first
+    if (rebookFromId) {
+      const originalBooking = await db.booking.findUnique({
+        where: { id: rebookFromId },
+        select: { id: true, roomId: true, status: true }
+      });
+
+      if (originalBooking && originalBooking.roomId === roomId) {
+        // Same room rebooking - checkout the old booking
+        await db.booking.update({
+          where: { id: rebookFromId },
+          data: { 
+            status: "CHECKED_OUT",
+            // Note: In a real system, you might want to add actualCheckOut timestamp
+          }
+        });
+        console.log(`Checked out old booking ${rebookFromId} for room continuity`);
+      }
+    }
 
     // Create the booking
     const newBooking = await db.booking.create({
@@ -233,7 +280,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function NewBooking() {
-  const { user, guests, rooms, selectedGuest, guestId } = useLoaderData<typeof loader>();
+  const { user, guests, rooms, selectedGuest, guestId, originalBooking } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
@@ -249,6 +296,20 @@ export default function NewBooking() {
       setSelectedUserId(selectedGuest.id);
     }
   }, [selectedGuest]);
+
+  // Pre-fill form data if rebooking from an existing booking
+  useEffect(() => {
+    if (originalBooking) {
+      setSelectedUserId(originalBooking.user.id);
+      // Set the same room as the original booking (tenant's current room)
+      setSelectedRoom(originalBooking.room.id);
+      // Set check-in date to the original checkout date (when rent became overdue)
+      // This ensures tenant pays for the overdue period and there's no gap in rental
+      const originalCheckOut = new Date(originalBooking.checkOut);
+      setCheckInDate(originalCheckOut);
+      setNumberOfPeriods(1); // Default to 1 period for new booking
+    }
+  }, [originalBooking]);
 
   // Calculate pricing preview
   const pricingPreview = useMemo(() => {
@@ -304,11 +365,15 @@ export default function NewBooking() {
         
         <Group justify="space-between">
           <div>
-            <Title order={2}>Create New Booking</Title>
+            <Title order={2}>
+              {originalBooking ? 'Rebook Tenant' : 'Create New Booking'}
+            </Title>
             <Text size="sm" c="dimmed">
-              {selectedGuest 
-                ? `Creating booking for ${selectedGuest.firstName} ${selectedGuest.lastName}`
-                : "Create a new booking for a guest"
+              {originalBooking 
+                ? `Creating new booking for ${originalBooking.user.firstName} ${originalBooking.user.lastName} (Previous booking expired: ${format(new Date(originalBooking.checkOut), "MMM dd, yyyy")})`
+                : selectedGuest 
+                  ? `Creating booking for ${selectedGuest.firstName} ${selectedGuest.lastName}`
+                  : "Create a new booking for a guest"
               }
             </Text>
           </div>
@@ -331,11 +396,37 @@ export default function NewBooking() {
           </Alert>
         )}
 
+        {originalBooking && (
+          <Alert
+            icon={<IconInfoCircle size={16} />}
+            title="Rebooking Information"
+            color="blue"
+            variant="light"
+          >
+            <Text size="sm">
+              You are creating a new booking for <strong>{originalBooking.user.firstName} {originalBooking.user.lastName}</strong> 
+              whose previous booking in Room {originalBooking.room.block}-{originalBooking.room.number} expired on{' '}
+              <strong>{format(new Date(originalBooking.checkOut), "MMMM dd, yyyy")}</strong>.
+              {differenceInDays(new Date(), new Date(originalBooking.checkOut)) > 0 && (
+                <span> This booking has been overdue for <strong>{differenceInDays(new Date(), new Date(originalBooking.checkOut))} days</strong>.</span>
+              )}
+            </Text>
+            <Text size="sm" mt="xs" style={{ fontStyle: 'italic' }}>
+              <strong>Note:</strong> Check-in date is set to the original checkout date ({format(new Date(originalBooking.checkOut), "MMM dd, yyyy")}) 
+              to ensure continuous rental coverage and no gap in the tenancy period.
+            </Text>
+            <Text size="sm" mt="xs" style={{ fontStyle: 'italic' }} c="orange">
+              <strong>Auto-checkout:</strong> If you select the same room, the previous booking will be automatically checked out to avoid conflicts.
+            </Text>
+          </Alert>
+        )}
+
         <Paper p="md" withBorder>
           <Form method="post">
             <input type="hidden" name="numberOfPeriods" value={numberOfPeriods.toString()} />
             <input type="hidden" name="roomId" value={selectedRoom || ''} />
             <input type="hidden" name="checkIn" value={checkInDate ? formatDateForForm(checkInDate) : ''} />
+            {originalBooking && <input type="hidden" name="rebookFromId" value={originalBooking.id} />}
             
             <Stack gap="md">
               <Select
@@ -363,13 +454,16 @@ export default function NewBooking() {
                   const dailyEquivalent = calculateDailyEquivalent(room.pricePerNight, room.pricingPeriod || 'NIGHT');
                   const roomWithType = room as typeof room & { type: { displayName: string } };
                   const roomTypeName = roomWithType.type?.displayName || 'Unknown Type';
+                  const isCurrentRoom = originalBooking && room.id === originalBooking.room.id;
+                  const roomLabel = `Room ${room.number} (Block ${room.block}) - ${roomTypeName} - ₵${room.pricePerNight}/${periodDisplay} (≈₵${dailyEquivalent.toFixed(2)}/day)${isCurrentRoom ? ' [CURRENT ROOM]' : ''}`;
                   return {
                     value: room.id,
-                    label: `Room ${room.number} (Block ${room.block}) - ${roomTypeName} - ₵${room.pricePerNight}/${periodDisplay} (≈₵${dailyEquivalent.toFixed(2)}/day)`
+                    label: roomLabel
                   };
                 })}
                 required
                 searchable
+                description={originalBooking ? "Current room pre-selected. You can change to a different room if needed." : ""}
               />
 
               <Group grow>

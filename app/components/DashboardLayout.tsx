@@ -75,6 +75,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
     },
     { icon: IconBed, label: "Rooms", link: "/dashboard/rooms", isActive: location.pathname.includes("/rooms") },
     { icon: IconUsers, label: "Tenants", link: "/dashboard/guests", isActive: location.pathname.includes("/guests") },
+    { icon: IconNetwork, label: "Security Deposits", link: "/dashboard/security-deposits", isActive: location.pathname.includes("/security-deposits") },
     { 
       icon: IconBell, 
       label: "Bookings", 
@@ -93,7 +94,6 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
   const financialItems = [
     { icon: IconCreditCard, label: "Payments", link: "/dashboard/payments", isActive: location.pathname.includes("/payments") },
     { icon: IconWallet, label: "Payment Accounts", link: "/dashboard/payment-accounts", isActive: location.pathname.includes("/payment-accounts") },
-    { icon: IconNetwork, label: "Security Deposits", link: "/dashboard/security-deposits", isActive: location.pathname.includes("/security-deposits") },
   ];
 
   const bottomNavigationItems = [

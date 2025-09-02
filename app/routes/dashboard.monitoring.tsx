@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, Link } from "@remix-run/react";
 import {
   Button,
   Stack,
@@ -22,6 +22,7 @@ import {
   IconMessage,
   IconPhone,
   IconBrandWhatsapp,
+  IconEye,
 } from "@tabler/icons-react";
 import { format, differenceInHours, differenceInMinutes, isToday, isTomorrow } from "date-fns";
 import  DashboardLayout   from "~/components/DashboardLayout";
@@ -469,39 +470,54 @@ export default function Monitoring() {
                         <div className="card-actions">
                           <div className="contact-info">
                             <span className="contact-label">Contact</span>
-                            <span className="contact-number">{booking.user.phone}</span>
+                            <span className="contact-number">{booking.user.phone || "No phone"}</span>
                           </div>
                           <div className="action-buttons">
                             <Button
                               size="xs"
                               variant="light"
-                              color="blue"
-                              leftSection={<IconMessage size={12} />}
-                              onClick={() => openNotificationModal(booking, 'overdue_alert')}
+                              color="gray"
+                              leftSection={<IconEye size={12} />}
+                              component={Link}
+                              to={`/dashboard/guests/${booking.userId}`}
                               className="contact-btn"
                             >
-                              SMS
+                              Details
                             </Button>
-                            <Button
-                              size="xs"
-                              variant="light"
-                              color="green"
-                              leftSection={<IconBrandWhatsapp size={12} />}
-                              onClick={() => sendNotification([booking], 'overdue_alert', 'whatsapp')}
-                              className="contact-btn"
-                            >
-                              WhatsApp
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="light"
-                              color="orange"
-                              leftSection={<IconPhone size={12} />}
-                              onClick={() => sendNotification([booking], 'overdue_alert', 'voice')}
-                              className="contact-btn"
-                            >
-                              Call
-                            </Button>
+                            {booking.user.phone && (
+                              <>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="blue"
+                                  leftSection={<IconMessage size={12} />}
+                                  onClick={() => openNotificationModal(booking, 'overdue_alert')}
+                                  className="contact-btn"
+                                >
+                                  SMS
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="green"
+                                  leftSection={<IconBrandWhatsapp size={12} />}
+                                  onClick={() => sendNotification([booking], 'overdue_alert', 'whatsapp')}
+                                  className="contact-btn"
+                                >
+                                  WhatsApp
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="orange"
+                                  leftSection={<IconPhone size={12} />}
+                                  onClick={() => sendNotification([booking], 'overdue_alert', 'voice')}
+                                  className="contact-btn"
+                                >
+                                  Call
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -609,39 +625,54 @@ export default function Monitoring() {
                         <div className="card-actions">
                           <div className="contact-info">
                             <span className="contact-label">Contact</span>
-                            <span className="contact-number">{booking.user.phone}</span>
+                            <span className="contact-number">{booking.user.phone || "No phone"}</span>
                           </div>
                           <div className="action-buttons">
                             <Button
                               size="xs"
                               variant="light"
-                              color="blue"
-                              leftSection={<IconMessage size={12} />}
-                              onClick={() => openNotificationModal(booking, 'checkout_reminder')}
+                              color="gray"
+                              leftSection={<IconEye size={12} />}
+                              component={Link}
+                              to={`/dashboard/guests/${booking.userId}`}
                               className="contact-btn"
                             >
-                              SMS
+                              Details
                             </Button>
-                            <Button
-                              size="xs"
-                              variant="light"
-                              color="green"
-                              leftSection={<IconBrandWhatsapp size={12} />}
-                              onClick={() => sendNotification([booking], 'checkout_reminder', 'whatsapp')}
-                              className="contact-btn"
-                            >
-                              WhatsApp
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="light"
-                              color="orange"
-                              leftSection={<IconPhone size={12} />}
-                              onClick={() => sendNotification([booking], 'checkout_reminder', 'voice')}
-                              className="contact-btn"
-                            >
-                              Call
-                            </Button>
+                            {booking.user.phone && (
+                              <>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="blue"
+                                  leftSection={<IconMessage size={12} />}
+                                  onClick={() => openNotificationModal(booking, 'checkout_reminder')}
+                                  className="contact-btn"
+                                >
+                                  SMS
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="green"
+                                  leftSection={<IconBrandWhatsapp size={12} />}
+                                  onClick={() => sendNotification([booking], 'checkout_reminder', 'whatsapp')}
+                                  className="contact-btn"
+                                >
+                                  WhatsApp
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="orange"
+                                  leftSection={<IconPhone size={12} />}
+                                  onClick={() => sendNotification([booking], 'checkout_reminder', 'voice')}
+                                  className="contact-btn"
+                                >
+                                  Call
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -763,39 +794,54 @@ export default function Monitoring() {
                         <div className="card-actions">
                           <div className="contact-info">
                             <span className="contact-label">Contact</span>
-                            <span className="contact-number">{booking.user.phone}</span>
+                            <span className="contact-number">{booking.user.phone || "No phone"}</span>
                           </div>
                           <div className="action-buttons">
                             <Button
                               size="xs"
                               variant="light"
-                              color={timeColor === 'red' ? 'red' : 'blue'}
-                              leftSection={<IconMessage size={12} />}
-                              onClick={() => openNotificationModal(booking, timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder')}
+                              color="gray"
+                              leftSection={<IconEye size={12} />}
+                              component={Link}
+                              to={`/dashboard/guests/${booking.userId}`}
                               className="contact-btn"
                             >
-                              SMS
+                              Details
                             </Button>
-                            <Button
-                              size="xs"
-                              variant="light"
-                              color="green"
-                              leftSection={<IconBrandWhatsapp size={12} />}
-                              onClick={() => sendNotification([booking], timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder', 'whatsapp')}
-                              className="contact-btn"
-                            >
-                              WhatsApp
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="light"
-                              color="orange"
-                              leftSection={<IconPhone size={12} />}
-                              onClick={() => sendNotification([booking], timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder', 'voice')}
-                              className="contact-btn"
-                            >
-                              Call
-                            </Button>
+                            {booking.user.phone && (
+                              <>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color={timeColor === 'red' ? 'red' : 'blue'}
+                                  leftSection={<IconMessage size={12} />}
+                                  onClick={() => openNotificationModal(booking, timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder')}
+                                  className="contact-btn"
+                                >
+                                  SMS
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="green"
+                                  leftSection={<IconBrandWhatsapp size={12} />}
+                                  onClick={() => sendNotification([booking], timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder', 'whatsapp')}
+                                  className="contact-btn"
+                                >
+                                  WhatsApp
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  color="orange"
+                                  leftSection={<IconPhone size={12} />}
+                                  onClick={() => sendNotification([booking], timeColor === 'red' ? 'overdue_alert' : 'checkout_reminder', 'voice')}
+                                  className="contact-btn"
+                                >
+                                  Call
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>

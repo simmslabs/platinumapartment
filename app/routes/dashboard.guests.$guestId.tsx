@@ -1,6 +1,6 @@
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, Link, useSearchParams } from "@remix-run/react";
+import { useLoaderData, Link, useSearchParams, useFetcher } from "@remix-run/react";
 import {
   Title,
   Stack,
@@ -21,8 +21,14 @@ import {
   Notification,
   Avatar,
   Box,
+  Modal,
+  NumberInput,
+  Textarea,
+  Checkbox,
+  Select,
 } from "@mantine/core";
-import { format, differenceInDays, startOfYear, endOfYear } from "date-fns";
+import { useDisclosure } from "@mantine/hooks";
+import { format, differenceInDays, startOfYear, endOfYear, isAfter, addDays } from "date-fns";
 import {
   IconUser,
   IconCalendar,
@@ -40,10 +46,14 @@ import {
   IconPlus,
   IconEdit,
   IconCheck,
+  IconClockPlus,
+  IconRefresh,
+  IconTrash,
 } from "@tabler/icons-react";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
 import DashboardLayout from "~/components/DashboardLayout";
+import { useState } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -152,6 +162,64 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const customerSince = firstBooking ? format(new Date(firstBooking.createdAt), "MMMM yyyy") : "Never";
   const daysSinceFirstBooking = firstBooking ? differenceInDays(new Date(), new Date(firstBooking.createdAt)) : 0;
 
+  // Calculate overdue rent status
+  const today = new Date();
+  console.log("Today's date:", today);
+  console.log("All bookings:", guest.bookings.map(b => ({
+    id: b.id,
+    status: b.status,
+    checkOut: b.checkOut,
+    paymentStatus: b.payment?.status || 'NO_PAYMENT',
+    isAfterToday: isAfter(today, new Date(b.checkOut)),
+    checkOutDate: new Date(b.checkOut)
+  })));
+
+  const overdueBookings = guest.bookings.filter(booking => {
+    // Active booking statuses - expanded to include more possibilities
+    const isActive = ["CONFIRMED", "CHECKED_IN", "PENDING"].includes(booking.status);
+    
+    // Check if checkout date has passed
+    const isOverdue = isAfter(today, new Date(booking.checkOut));
+    
+    // For overdue detection in apartment management:
+    // If checkout date has passed and booking is still active, it's overdue regardless of payment status
+    // This means tenant needs to either checkout or extend/rebook for additional period
+    
+    console.log(`Booking ${booking.id}:`, {
+      isActive,
+      isOverdue,
+      status: booking.status,
+      checkOut: booking.checkOut,
+      paymentStatus: booking.payment?.status || 'NO_PAYMENT',
+      daysPastDue: isOverdue ? differenceInDays(today, new Date(booking.checkOut)) : 0
+    });
+    
+    return isActive && isOverdue;
+  });
+
+  const nearDueBookings = guest.bookings.filter(booking => {
+    // Active booking statuses
+    const isActive = ["CONFIRMED", "CHECKED_IN", "PENDING"].includes(booking.status);
+    
+    const daysUntilDue = differenceInDays(new Date(booking.checkOut), today);
+    const isDueSoon = daysUntilDue >= 0 && daysUntilDue <= 7;
+    
+    // Check payment status
+    const hasUnpaidBalance = !booking.payment || 
+                            booking.payment.status === "PENDING" || 
+                            booking.payment.status === "FAILED" ||
+                            booking.payment.status !== "COMPLETED";
+    
+    return isActive && isDueSoon && hasUnpaidBalance && !isAfter(today, new Date(booking.checkOut));
+  });
+
+  console.log("Overdue bookings found:", overdueBookings.length);
+  console.log("Near due bookings found:", nearDueBookings.length);
+
+  const activeBookings = guest.bookings.filter(booking => 
+    ["CONFIRMED", "CHECKED_IN", "PENDING"].includes(booking.status)
+  );
+
   return json({
     user,
     guest,
@@ -173,14 +241,109 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       customerSince,
       daysSinceFirstBooking,
       currentYear,
+      overdueBookings: overdueBookings.length,
+      nearDueBookings: nearDueBookings.length,
+      activeBookings: activeBookings.length,
+      overdueBookingsList: overdueBookings,
+      nearDueBookingsList: nearDueBookings,
     },
   });
+}
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  await requireUserId(request);
+  const formData = await request.formData();
+  const actionType = formData.get("action");
+
+  if (actionType === "delete-booking") {
+    const bookingId = formData.get("bookingId") as string;
+    const forceDelete = formData.get("forceDelete") === "true";
+    
+    if (!bookingId) {
+      return json({ error: "Booking ID is required" }, { status: 400 });
+    }
+
+    try {
+      // First, get the booking details to check if it's overdue
+      const booking = await db.booking.findUnique({
+        where: { id: bookingId },
+        select: { 
+          id: true, 
+          status: true, 
+          checkOut: true,
+          room: { select: { number: true, block: true } }
+        }
+      });
+
+      if (!booking) {
+        return json({ error: "Booking not found" }, { status: 404 });
+      }
+
+      // Verify it's actually an overdue booking (unless force delete is enabled)
+      if (!forceDelete) {
+        const today = new Date();
+        const isActive = ["CONFIRMED", "CHECKED_IN", "PENDING"].includes(booking.status);
+        const isOverdue = isAfter(today, new Date(booking.checkOut));
+
+        if (!isActive || !isOverdue) {
+          return json({ error: "Only overdue bookings can be deleted (or use force delete)" }, { status: 400 });
+        }
+      }
+
+      // Delete the booking and related records
+      await db.$transaction(async (prisma) => {
+        // Delete related services first
+        await prisma.bookingService.deleteMany({
+          where: { bookingId: bookingId }
+        });
+        
+        // Delete related payments
+        await prisma.payment.deleteMany({
+          where: { bookingId: bookingId }
+        });
+        
+        // Delete related security deposits
+        await prisma.securityDeposit.deleteMany({
+          where: { bookingId: bookingId }
+        });
+        
+        // Finally delete the booking
+        await prisma.booking.delete({
+          where: { id: bookingId }
+        });
+      });
+
+      return json({ 
+        success: true, 
+        message: `${forceDelete ? 'Force deleted' : 'Overdue booking for'} Room ${booking.room.block}-${booking.room.number} has been deleted successfully.` 
+      });
+    } catch (error) {
+      console.error("Error deleting booking:", error);
+      return json({ error: "Failed to delete booking. Please try again." }, { status: 500 });
+    }
+  }
+
+  return json({ error: "Invalid action" }, { status: 400 });
 }
 
 export default function GuestDetails() {
   const { user, guest, stats } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const success = searchParams.get("success");
+  const fetcher = useFetcher<{success?: boolean; message?: string; error?: string}>();
+  
+  // Extension modal state
+  const [extensionModalOpened, { open: openExtensionModal, close: closeExtensionModal }] = useDisclosure(false);
+  const [selectedBooking, setSelectedBooking] = useState<typeof guest.bookings[0] | null>(null);
+  const [extensionPeriods, setExtensionPeriods] = useState(1);
+  const [extensionReason, setExtensionReason] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [paymentAccount, setPaymentAccount] = useState("");
+
+  // Delete confirmation modal state
+  const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [bookingToDelete, setBookingToDelete] = useState<typeof guest.bookings[0] | null>(null);
+  const [forceDelete, setForceDelete] = useState(false);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -211,6 +374,74 @@ export default function GuestDetails() {
   };
 
   const loyaltyTier = getLoyaltyTier();
+
+  // Helper function to check if booking can be extended
+  const canExtendBooking = (booking: typeof guest.bookings[0]) => {
+    const today = new Date();
+    const checkOutDate = new Date(booking.checkOut);
+    const daysUntilCheckOut = differenceInDays(checkOutDate, today);
+    
+    // Can extend if booking is active (checked in, confirmed, or pending), and checkout is within 7 days or already passed
+    return (
+      ["CHECKED_IN", "CONFIRMED", "PENDING"].includes(booking.status) &&
+      daysUntilCheckOut <= 7
+    );
+  };
+
+  // Helper function to get period display name
+  const getPeriodDisplayName = (period: string) => {
+    switch (period) {
+      case 'NIGHT': return 'night';
+      case 'DAY': return 'day';
+      case 'WEEK': return 'week';
+      case 'MONTH': return 'month';
+      case 'YEAR': return 'year';
+      default: return 'day';
+    }
+  };
+
+  // Handle extension submission
+  const handleExtensionSubmit = () => {
+    if (!selectedBooking) return;
+    
+    const formData = new FormData();
+    formData.append("bookingId", selectedBooking.id);
+    formData.append("extensionPeriods", extensionPeriods.toString());
+    formData.append("reason", extensionReason);
+    formData.append("paymentMethod", paymentMethod);
+    formData.append("paymentAccount", paymentAccount);
+    
+    fetcher.submit(formData, {
+      method: "POST",
+      action: "/api/bookings/extend",
+    });
+    
+    closeExtensionModal();
+    setSelectedBooking(null);
+    setExtensionPeriods(1);
+    setExtensionReason("");
+    setPaymentMethod("CASH");
+    setPaymentAccount("");
+  };
+
+  // Handle delete confirmation submission
+  const handleDeleteSubmit = () => {
+    if (!bookingToDelete) return;
+    
+    const formData = new FormData();
+    formData.append("bookingId", bookingToDelete.id);
+    formData.append("action", "delete-booking");
+    formData.append("forceDelete", forceDelete.toString());
+    
+    fetcher.submit(formData, {
+      method: "POST",
+      action: `/dashboard/guests/${guest.id}`,
+    });
+    
+    closeDeleteModal();
+    setBookingToDelete(null);
+    setForceDelete(false);
+  };
 
   return (
     <DashboardLayout user={user}>
@@ -266,6 +497,167 @@ export default function GuestDetails() {
           >
             Tenant information has been updated successfully.
           </Notification>
+        )}
+
+        {fetcher.data?.success && (
+          <Notification
+            icon={<IconCheck size={18} />}
+            color="green"
+            title={fetcher.data.message?.includes("deleted") ? "Booking Deleted Successfully" : "Rent Extended Successfully"}
+            onClose={() => window.location.reload()}
+          >
+            {fetcher.data.message}
+          </Notification>
+        )}
+
+        {fetcher.data?.error && (
+          <Notification
+            icon={<IconInfoCircle size={18} />}
+            color="red"
+            title={fetcher.data.error?.includes("delete") ? "Deletion Failed" : "Extension Failed"}
+            onClose={() => window.location.reload()}
+          >
+            {fetcher.data.error}
+          </Notification>
+        )}
+
+        {/* OVERDUE RENT STATUS - Prominent Alert */}
+        {stats.overdueBookings > 0 && (
+          <Alert
+            icon={<IconClock size={20} />}
+            title="⚠️ RENT OVERDUE"
+            color="red"
+            variant="filled"
+            style={{ 
+              fontSize: '16px', 
+              fontWeight: 'bold',
+              border: '3px solid #fa5252',
+              boxShadow: '0 4px 12px rgba(250, 82, 82, 0.3)'
+            }}
+          >
+            <Stack gap="xs">
+              <Text size="lg" fw={700} c="white">
+                {stats.overdueBookings} ACTIVE BOOKING{stats.overdueBookings > 1 ? 'S' : ''} OVERDUE
+              </Text>
+              {stats.overdueBookingsList.map((booking: typeof guest.bookings[0]) => (
+                <Group key={booking.id} justify="space-between" style={{ background: 'rgba(255,255,255,0.1)', padding: '8px', borderRadius: '4px' }}>
+                  <div>
+                    <Text c="white" fw={600}>
+                      Room {booking.room.block}-{booking.room.number}
+                    </Text>
+                    <Text c="white" fw={600}>
+                      Due: {format(new Date(booking.checkOut), "MMM dd, yyyy")} 
+                      ({differenceInDays(new Date(), new Date(booking.checkOut))} days overdue)
+                    </Text>
+                    <Text c="white" fw={700}>
+                      Amount: <NumberFormatter value={booking.totalAmount} prefix="₵" thousandSeparator />
+                    </Text>
+                    <Text c="white" fw={500} size="sm">
+                      Payment: {booking.payment?.status || 'NO_PAYMENT'}
+                      {booking.payment?.status === 'COMPLETED' && ' - Needs Extension/Rebook'}
+                    </Text>
+                  </div>
+                  <Group gap="xs">
+                    <Button
+                      size="xs"
+                      variant="white"
+                      color="red"
+                      leftSection={<IconRefresh size={14} />}
+                      component={Link}
+                      to={`/dashboard/bookings/new?guestId=${guest.id}&rebookFromId=${booking.id}`}
+                    >
+                      Rebook
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      color="white"
+                      leftSection={<IconClockPlus size={14} />}
+                      onClick={() => {
+                        setSelectedBooking(booking);
+                        openExtensionModal();
+                      }}
+                    >
+                      Extend
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="filled"
+                      color="red"
+                      leftSection={<IconTrash size={14} />}
+                      onClick={() => {
+                        setBookingToDelete(booking);
+                        openDeleteModal();
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </Group>
+                </Group>
+              ))}
+            </Stack>
+          </Alert>
+        )}
+
+        {/* NEAR DUE RENT STATUS */}
+        {stats.nearDueBookings > 0 && stats.overdueBookings === 0 && (
+          <Alert
+            icon={<IconClock size={20} />}
+            title="⏰ RENT DUE SOON"
+            color="orange"
+            variant="filled"
+            style={{ 
+              fontSize: '14px', 
+              fontWeight: 'bold',
+              border: '2px solid #fd7e14'
+            }}
+          >
+            <Stack gap="xs">
+              <Text size="md" fw={600} c="white">
+                {stats.nearDueBookings} BOOKING{stats.nearDueBookings > 1 ? 'S' : ''} DUE WITHIN 7 DAYS
+              </Text>
+              {stats.nearDueBookingsList.map((booking: typeof guest.bookings[0]) => (
+                <Group key={booking.id} justify="space-between" style={{ background: 'rgba(255,255,255,0.1)', padding: '6px', borderRadius: '4px' }}>
+                  <div>
+                    <Text c="white" fw={500}>
+                      Room {booking.room.block}-{booking.room.number}
+                    </Text>
+                    <Text c="white" fw={500}>
+                      Due: {format(new Date(booking.checkOut), "MMM dd, yyyy")}
+                      ({differenceInDays(new Date(booking.checkOut), new Date())} days remaining)
+                    </Text>
+                    <Text c="white" fw={600}>
+                      <NumberFormatter value={booking.totalAmount} prefix="₵" thousandSeparator />
+                    </Text>
+                  </div>
+                  <Group gap="xs">
+                    <Button
+                      size="xs"
+                      variant="white"
+                      color="orange"
+                      leftSection={<IconRefresh size={14} />}
+                      component={Link}
+                      to={`/dashboard/bookings/new?guestId=${guest.id}&rebookFromId=${booking.id}`}
+                    >
+                      Rebook
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      color="white"
+                      leftSection={<IconClockPlus size={14} />}
+                      onClick={() => {
+                        setSelectedBooking(booking);
+                        openExtensionModal();
+                      }}
+                    >
+                      Extend
+                    </Button>
+                  </Group>
+                </Group>
+              ))}
+            </Stack>
+          </Alert>
         )}
 
         {/* Tenant Information */}
@@ -492,6 +884,62 @@ export default function GuestDetails() {
 
         {/* Statistics Cards */}
         <Grid>
+          {/* Overdue Status Card - Most Prominent */}
+          {stats.overdueBookings > 0 && (
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Card withBorder style={{ 
+                borderColor: '#f44336', 
+                borderWidth: '3px',
+                background: 'linear-gradient(45deg, #ffebee, #ffcdd2)',
+                boxShadow: '0 4px 12px rgba(244, 67, 54, 0.2)'
+              }}>
+                <Group justify="space-between" mb="xs">
+                  <Text c="red" size="sm" fw={700}>🚨 OVERDUE RENT</Text>
+                  <ThemeIcon color="red" variant="filled" size="lg">
+                    <IconClock size={20} />
+                  </ThemeIcon>
+                </Group>
+                <Text fw={700} size="xl" c="red">{stats.overdueBookings}</Text>
+                <Text c="red" size="xs" fw={600} mb="sm">
+                  Active booking{stats.overdueBookings > 1 ? 's' : ''} overdue
+                </Text>
+                <Button
+                  size="xs"
+                  variant="filled"
+                  color="red"
+                  fullWidth
+                  leftSection={<IconRefresh size={14} />}
+                  component={Link}
+                  to={`/dashboard/bookings/new?guestId=${guest.id}`}
+                >
+                  Create New Booking
+                </Button>
+              </Card>
+            </Grid.Col>
+          )}
+
+          {/* Near Due Status Card */}
+          {stats.nearDueBookings > 0 && (
+            <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+              <Card withBorder style={{ 
+                borderColor: '#ff9800', 
+                borderWidth: '2px',
+                background: 'linear-gradient(45deg, #fff3e0, #ffe0b2)'
+              }}>
+                <Group justify="space-between" mb="xs">
+                  <Text c="orange" size="sm" fw={600}>⏰ DUE SOON</Text>
+                  <ThemeIcon color="orange" variant="filled">
+                    <IconCalendar size={16} />
+                  </ThemeIcon>
+                </Group>
+                <Text fw={700} size="xl" c="orange">{stats.nearDueBookings}</Text>
+                <Text c="orange" size="xs" fw={500}>
+                  Due within 7 days
+                </Text>
+              </Card>
+            </Grid.Col>
+          )}
+
           <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
             <Card withBorder>
               <Text c="dimmed" size="sm">Total Bookings</Text>
@@ -586,7 +1034,12 @@ export default function GuestDetails() {
 
         {/* Recent Bookings */}
         <Card withBorder>
-          <Text fw={600} mb="md">Recent Bookings</Text>
+          <Group justify="space-between" mb="md">
+            <Text fw={600}>Recent Bookings</Text>
+            <Text size="sm" c="dimmed">
+              Rent can be extended for active bookings within 7 days of checkout
+            </Text>
+          </Group>
           {guest.bookings.length > 0 ? (
             <Table.ScrollContainer minWidth={800}>
               <Table striped highlightOnHover>
@@ -598,16 +1051,46 @@ export default function GuestDetails() {
                     <Table.Th>Payment Status</Table.Th>
                     <Table.Th>Booking Status</Table.Th>
                     <Table.Th>Security Deposit</Table.Th>
+                    <Table.Th>Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {guest.bookings.slice(0, 10).map((booking) => (
-                    <Table.Tr key={booking.id}>
+                  {guest.bookings.slice(0, 10).map((booking) => {
+                    const today = new Date();
+                    const isOverdue = isAfter(today, new Date(booking.checkOut)) && 
+                                     ["CONFIRMED", "CHECKED_IN", "PENDING"].includes(booking.status);
+                    
+                    const isDueSoon = differenceInDays(new Date(booking.checkOut), today) >= 0 && 
+                                     differenceInDays(new Date(booking.checkOut), today) <= 7 &&
+                                     ["CONFIRMED", "CHECKED_IN", "PENDING"].includes(booking.status) &&
+                                     (!booking.payment || 
+                                      booking.payment.status === "PENDING" || 
+                                      booking.payment.status === "FAILED" ||
+                                      booking.payment.status !== "COMPLETED") &&
+                                     !isAfter(today, new Date(booking.checkOut));
+                    
+                    return (
+                      <Table.Tr key={booking.id} style={{ 
+                        backgroundColor: isOverdue ? '#ffebee' : isDueSoon ? '#fff3e0' : 'transparent',
+                        borderLeft: isOverdue ? '4px solid #f44336' : isDueSoon ? '4px solid #ff9800' : 'none'
+                      }}>
                       <Table.Td>
                         <div>
-                          <Text size="sm" fw={500}>
-                            {booking.room.blockRelation?.name || booking.room.block}-{booking.room.number}
-                          </Text>
+                          <Group gap="xs">
+                            <Text size="sm" fw={500}>
+                              {booking.room.blockRelation?.name || booking.room.block}-{booking.room.number}
+                            </Text>
+                            {isOverdue && (
+                              <Badge color="red" size="xs" variant="filled" style={{ fontWeight: 'bold' }}>
+                                OVERDUE
+                              </Badge>
+                            )}
+                            {isDueSoon && !isOverdue && (
+                              <Badge color="orange" size="xs" variant="filled">
+                                DUE SOON
+                              </Badge>
+                            )}
+                          </Group>
                           <Text size="xs" c="dimmed">
                             {((booking.room as typeof booking.room & { type: { displayName: string } }).type?.displayName || 'Unknown Type')}
                           </Text>
@@ -615,9 +1098,21 @@ export default function GuestDetails() {
                       </Table.Td>
                       <Table.Td>
                         <div>
-                          <Text size="sm">
-                            {format(new Date(booking.checkIn), "MMM dd")} - {format(new Date(booking.checkOut), "MMM dd, yyyy")}
-                          </Text>
+                          <Group gap="xs">
+                            <Text size="sm">
+                              {format(new Date(booking.checkIn), "MMM dd")} - {format(new Date(booking.checkOut), "MMM dd, yyyy")}
+                            </Text>
+                            {isOverdue && (
+                              <Text size="xs" c="red" fw={700}>
+                                ({differenceInDays(today, new Date(booking.checkOut))} days overdue)
+                              </Text>
+                            )}
+                            {isDueSoon && !isOverdue && (
+                              <Text size="xs" c="orange" fw={600}>
+                                ({differenceInDays(new Date(booking.checkOut), today)} days left)
+                              </Text>
+                            )}
+                          </Group>
                           <Text size="xs" c="dimmed">
                             {differenceInDays(new Date(booking.checkOut), new Date(booking.checkIn))} nights
                           </Text>
@@ -652,8 +1147,58 @@ export default function GuestDetails() {
                           <Text size="sm" c="dimmed">None</Text>
                         )}
                       </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs">
+                          {canExtendBooking(booking) && (
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="blue"
+                              leftSection={<IconClockPlus size={14} />}
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                openExtensionModal();
+                              }}
+                            >
+                              Extend
+                            </Button>
+                          )}
+                          {isOverdue && (
+                            <Button
+                              size="xs"
+                              variant="filled"
+                              color="red"
+                              leftSection={<IconRefresh size={14} />}
+                              component={Link}
+                              to={`/dashboard/bookings/new?guestId=${guest.id}&rebookFromId=${booking.id}`}
+                            >
+                              Rebook
+                            </Button>
+                          )}
+                          {isDueSoon && !isOverdue && (
+                            <Button
+                              size="xs"
+                              variant="light"
+                              color="orange"
+                              leftSection={<IconRefresh size={14} />}
+                              component={Link}
+                              to={`/dashboard/bookings/new?guestId=${guest.id}&rebookFromId=${booking.id}`}
+                            >
+                              Rebook
+                            </Button>
+                          )}
+                          {!canExtendBooking(booking) && !isOverdue && !isDueSoon && (
+                            <Text size="xs" c="dimmed">
+                              {["CHECKED_OUT", "CANCELLED"].includes(booking.status) 
+                                ? "Completed" 
+                                : "Not eligible"}
+                            </Text>
+                          )}
+                        </Group>
+                      </Table.Td>
                     </Table.Tr>
-                  ))}
+                    );
+                  })}
                 </Table.Tbody>
               </Table>
             </Table.ScrollContainer>
@@ -689,6 +1234,209 @@ export default function GuestDetails() {
             </Timeline>
           </Card>
         )}
+        
+        {/* Delete Confirmation Modal */}
+        <Modal
+          opened={deleteModalOpened}
+          onClose={closeDeleteModal}
+          title="Delete Booking Confirmation"
+          size="md"
+        >
+          {bookingToDelete && (
+            <Stack gap="md">
+              <Alert color="red" variant="light">
+                <Text size="sm">
+                  <strong>⚠️ Warning:</strong> You are about to delete the booking for:
+                </Text>
+                <Text size="sm" mt="xs">
+                  <strong>Room:</strong> {bookingToDelete.room.block}-{bookingToDelete.room.number}
+                </Text>
+                <Text size="sm">
+                  <strong>Tenant:</strong> {guest.firstName} {guest.lastName}
+                </Text>
+                <Text size="sm">
+                  <strong>Period:</strong> {format(new Date(bookingToDelete.checkIn), "MMM dd")} - {format(new Date(bookingToDelete.checkOut), "MMM dd, yyyy")}
+                </Text>
+                <Text size="sm">
+                  <strong>Amount:</strong> <NumberFormatter value={bookingToDelete.totalAmount} prefix="₵" thousandSeparator />
+                </Text>
+                <Text size="sm">
+                  <strong>Status:</strong> {bookingToDelete.status}
+                </Text>
+              </Alert>
+
+              <Text size="sm" c="dimmed">
+                This action will permanently delete the booking and all related data including payments, security deposits, and services. This cannot be undone.
+              </Text>
+
+              <Checkbox
+                checked={forceDelete}
+                onChange={(event) => setForceDelete(event.currentTarget.checked)}
+                label="Force delete (bypass overdue validation)"
+                description="Check this to delete any booking regardless of its status or due date"
+                color="red"
+              />
+              
+              <Group justify="flex-end" gap="sm">
+                <Button variant="light" onClick={closeDeleteModal}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDeleteSubmit}
+                  loading={fetcher.state === "submitting"}
+                  leftSection={<IconTrash size={16} />}
+                  color="red"
+                  variant="filled"
+                >
+                  {forceDelete ? "Force Delete" : "Delete Booking"}
+                </Button>
+              </Group>
+            </Stack>
+          )}
+        </Modal>
+        
+        {/* Rent Extension Modal */}
+        <Modal
+          opened={extensionModalOpened}
+          onClose={closeExtensionModal}
+          title="Extend Rent Period"
+          size="md"
+        >
+          {selectedBooking && (
+            <Stack gap="md">
+              <Alert color="blue" variant="light">
+                <Text size="sm">
+                  <strong>Room:</strong> {selectedBooking.room.blockRelation?.name || selectedBooking.room.block}-{selectedBooking.room.number}
+                </Text>
+                <Text size="sm">
+                  <strong>Current checkout:</strong> {format(new Date(selectedBooking.checkOut), "MMM dd, yyyy")}
+                </Text>
+                <Text size="sm">
+                  <strong>Rate:</strong> ₵{selectedBooking.room.pricePerNight}/{getPeriodDisplayName(selectedBooking.room.pricingPeriod || 'NIGHT')}
+                </Text>
+              </Alert>
+              
+              <NumberInput
+                label={`Extension periods (${getPeriodDisplayName(selectedBooking.room.pricingPeriod || 'NIGHT')}s)`}
+                description={`How many ${getPeriodDisplayName(selectedBooking.room.pricingPeriod || 'NIGHT')}s to extend the rent?`}
+                value={extensionPeriods}
+                onChange={(value) => setExtensionPeriods(typeof value === 'number' ? value : 1)}
+                min={1}
+                max={12}
+                required
+              />
+              
+              {extensionPeriods > 0 && selectedBooking.room.pricePerNight && (
+                <Paper p="sm" withBorder bg="blue.0">
+                  <Group justify="space-between">
+                    <Text size="sm">Additional cost:</Text>
+                    <Text size="sm" fw={500}>
+                      ₵{(selectedBooking.room.pricePerNight * extensionPeriods).toFixed(2)}
+                    </Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text size="sm">New checkout date:</Text>
+                    <Text size="sm" fw={500}>
+                      {(() => {
+                        const currentCheckOut = new Date(selectedBooking.checkOut);
+                        let newDate: Date;
+                        switch (selectedBooking.room.pricingPeriod) {
+                          case 'WEEK':
+                            newDate = addDays(currentCheckOut, extensionPeriods * 7);
+                            break;
+                          case 'MONTH':
+                            newDate = new Date(currentCheckOut);
+                            newDate.setMonth(newDate.getMonth() + extensionPeriods);
+                            break;
+                          case 'YEAR':
+                            newDate = new Date(currentCheckOut);
+                            newDate.setFullYear(newDate.getFullYear() + extensionPeriods);
+                            break;
+                          default:
+                            newDate = addDays(currentCheckOut, extensionPeriods);
+                        }
+                        return format(newDate, "MMM dd, yyyy");
+                      })()}
+                    </Text>
+                  </Group>
+                </Paper>
+              )}
+              
+              <Textarea
+                label="Reason for extension (optional)"
+                placeholder="Enter reason for extending the rent period..."
+                value={extensionReason}
+                onChange={(event) => setExtensionReason(event.currentTarget.value)}
+                rows={3}
+              />
+
+              {/* Payment Information Section */}
+              <Divider label="Payment Information" labelPosition="center" />
+              
+              <Select
+                label="Payment Method"
+                placeholder="Select payment method"
+                value={paymentMethod}
+                onChange={(value) => setPaymentMethod(value || "CASH")}
+                data={[
+                  { value: "CASH", label: "Cash" },
+                  { value: "BANK_TRANSFER", label: "Bank Transfer" },
+                  { value: "MOBILE_MONEY", label: "Mobile Money" },
+                  { value: "CREDIT_CARD", label: "Credit Card" },
+                  { value: "DEBIT_CARD", label: "Debit Card" },
+                  { value: "ONLINE", label: "Online Payment" },
+                  { value: "PAYPAL", label: "PayPal" },
+                  { value: "STRIPE", label: "Stripe" },
+                ]}
+                required
+              />
+
+              {paymentMethod !== "CASH" && (
+                <Textarea
+                  label={`${paymentMethod === "BANK_TRANSFER" ? "Bank Account Details" : 
+                          paymentMethod === "MOBILE_MONEY" ? "Mobile Money Account" :
+                          paymentMethod === "CREDIT_CARD" || paymentMethod === "DEBIT_CARD" ? "Card Details" :
+                          paymentMethod === "PAYPAL" ? "PayPal Account" :
+                          paymentMethod === "STRIPE" ? "Stripe Details" :
+                          "Account Details"}`}
+                  placeholder={`Enter ${paymentMethod === "BANK_TRANSFER" ? "bank account number and name" : 
+                               paymentMethod === "MOBILE_MONEY" ? "mobile money number" :
+                               paymentMethod === "CREDIT_CARD" || paymentMethod === "DEBIT_CARD" ? "last 4 digits of card" :
+                               paymentMethod === "PAYPAL" ? "PayPal email address" :
+                               paymentMethod === "STRIPE" ? "Stripe payment ID" :
+                               "account information"}...`}
+                  value={paymentAccount}
+                  onChange={(event) => setPaymentAccount(event.currentTarget.value)}
+                  rows={2}
+                />
+              )}
+
+              {extensionPeriods > 0 && selectedBooking.room.pricePerNight && (
+                <Alert color="blue" variant="light">
+                  <Text size="sm" fw={500}>
+                    💰 Payment Required: <NumberFormatter value={selectedBooking.room.pricePerNight * extensionPeriods} prefix="₵" />
+                  </Text>
+                  <Text size="xs" c="dimmed" mt="xs">
+                    This amount will be recorded as a transaction and added to the tenant&apos;s payment history.
+                  </Text>
+                </Alert>
+              )}
+              
+              <Group justify="flex-end" gap="sm">
+                <Button variant="light" onClick={closeExtensionModal}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleExtensionSubmit}
+                  loading={fetcher.state === "submitting"}
+                  leftSection={<IconClockPlus size={16} />}
+                >
+                  Extend Rent
+                </Button>
+              </Group>
+            </Stack>
+          )}
+        </Modal>
       </Stack>
     </DashboardLayout>
   );

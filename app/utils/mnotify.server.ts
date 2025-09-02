@@ -468,6 +468,47 @@ class MNotifyService {
       message,
     });
   }
+
+  // Rent extension notification for guest
+  async sendRentExtensionAlert(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    newCheckOut: string,
+    extensionPeriods: number,
+    pricingPeriod: string,
+    additionalAmount: number,
+    paymentMethod: string
+  ): Promise<MNotifyResponse> {
+    const periodText = extensionPeriods === 1 ? pricingPeriod.toLowerCase() : `${pricingPeriod.toLowerCase()}s`;
+    const message = `Hi ${guestName}, your rent for Room ${roomNumber} has been extended by ${extensionPeriods} ${periodText} until ${newCheckOut}. Additional payment: ₵${additionalAmount.toFixed(2)} via ${paymentMethod}. Thank you! - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
+
+  // Rent extension notification for admin
+  async sendRentExtensionAdminAlert(
+    phone: string,
+    guestName: string,
+    roomNumber: string,
+    newCheckOut: string,
+    extensionPeriods: number,
+    pricingPeriod: string,
+    additionalAmount: number,
+    paymentMethod: string,
+    bookingId: string
+  ): Promise<MNotifyResponse> {
+    const periodText = extensionPeriods === 1 ? pricingPeriod.toLowerCase() : `${pricingPeriod.toLowerCase()}s`;
+    const message = `RENT EXTENDED: ${guestName} in Room ${roomNumber} extended by ${extensionPeriods} ${periodText} until ${newCheckOut}. Payment: ₵${additionalAmount.toFixed(2)} via ${paymentMethod}. Booking: #${bookingId.slice(-8)} - Platinum Apartment`;
+    
+    return this.sendSMS({
+      recipient: phone,
+      message,
+    });
+  }
 }
 
 // Export singleton instance
