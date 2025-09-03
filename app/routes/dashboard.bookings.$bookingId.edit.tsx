@@ -25,6 +25,7 @@ import { RoomStatus } from "@prisma/client";
 import { requireUserId, getUser } from "~/utils/session.server";
 import DashboardLayout from "~/components/DashboardLayout";
 import { updateRoomStatus } from "~/utils/room-status.server";
+import { mnotifyService } from "~/utils/mnotify.server";
 
 // Pricing utility functions
 const calculateCheckoutDate = (checkInDate: Date, periods: number, pricingPeriod: string): Date => {
@@ -96,7 +97,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true, 
           firstName: true, 
           lastName: true, 
-          email: true 
+          email: true,
+          phone: true
         },
       },
       room: {
@@ -251,6 +253,42 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
 
     console.log("Booking updated successfully:", updatedBooking.id);
+
+    // Check if check-in date changed and send SMS notification
+    const originalCheckIn = new Date(currentBooking.checkIn);
+    const newCheckIn = new Date(checkIn);
+    
+    if (originalCheckIn.getTime() !== newCheckIn.getTime()) {
+      // Check-in date has changed, send SMS notification
+      console.log(`Check-in date changed from ${format(originalCheckIn, "MMM dd, yyyy")} to ${format(newCheckIn, "MMM dd, yyyy")}`);
+      
+      try {
+        // Only send SMS if user has a phone number
+        if (updatedBooking.user.phone) {
+          const guestName = `${updatedBooking.user.firstName} ${updatedBooking.user.lastName}`;
+          const roomNumber = updatedBooking.room.number;
+          const newCheckInFormatted = format(newCheckIn, "MMM dd, yyyy 'at' h:mm a");
+          
+          const message = `Hi ${guestName}! Your check-in date for Room ${roomNumber} has been updated to ${newCheckInFormatted}. Please plan accordingly. Contact us if you have any questions.`;
+          
+          console.log(`Sending SMS to ${updatedBooking.user.phone}: ${message}`);
+          
+          await mnotifyService.sendSMS({
+            recipient: updatedBooking.user.phone,
+            message: message,
+          });
+          
+          console.log(`✅ SMS notification sent successfully to ${updatedBooking.user.phone} for check-in date change`);
+        } else {
+          console.log("⚠️ User has no phone number, skipping SMS notification");
+        }
+      } catch (smsError) {
+        console.error("❌ Failed to send SMS notification:", smsError);
+        // Don't fail the booking update if SMS fails
+      }
+    } else {
+      console.log("Check-in date unchanged, no SMS notification needed");
+    }
 
     // Update room statuses if room changed
     if (currentBooking.roomId !== roomId) {
