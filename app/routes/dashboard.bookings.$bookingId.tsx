@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
+import { useLoaderData, Link, Outlet, useLocation } from "@remix-run/react";
 import {
   Title,
   Paper,
@@ -16,7 +16,7 @@ import {
   Anchor,
   Alert,
 } from "@mantine/core";
-import { IconArrowLeft, IconInfoCircle, IconCalendar, IconUser, IconHome, IconCreditCard } from "@tabler/icons-react";
+import { IconArrowLeft, IconInfoCircle, IconCalendar, IconUser, IconHome, IconCreditCard, IconEdit } from "@tabler/icons-react";
 import { format } from "date-fns";
 import  DashboardLayout   from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
@@ -168,6 +168,7 @@ function getPricingPeriodDisplay(period: string) {
 
 export default function BookingDetail() {
   const { booking, user } = useLoaderData<typeof loader>();
+  const location = useLocation();
 
   const breadcrumbItems = [
     { title: "Dashboard", href: "/dashboard" },
@@ -190,24 +191,36 @@ export default function BookingDetail() {
   const checkOutDate = new Date(booking.checkOut);
   const stayDurationDays = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
 
-  return (
-    <DashboardLayout user={user}>
-      <Stack gap="md">
-        <Group justify="space-between" align="center">
+  if(location.pathname !== `/dashboard/bookings/${booking.id}`) return <Outlet />
+
+    return (
+      <DashboardLayout user={user}>
+        <Stack gap="md">
+          <Group justify="space-between" align="center">
           <div>
             <Breadcrumbs separator=">">{breadcrumbItems}</Breadcrumbs>
             <Title order={2} mt="xs">
               Booking Details
             </Title>
           </div>
-          <Button
-            component={Link}
-            to="/dashboard/bookings"
-            variant="light"
-            leftSection={<IconArrowLeft size={16} />}
-          >
-            Back to Bookings
-          </Button>
+          <Group gap="sm">
+            <Button
+              component={Link}
+              to={`/dashboard/bookings/${booking.id}/edit`}
+              variant="filled"
+              leftSection={<IconEdit size={16} />}
+            >
+              Edit Booking
+            </Button>
+            <Button
+              component={Link}
+              to="/dashboard/bookings"
+              variant="light"
+              leftSection={<IconArrowLeft size={16} />}
+            >
+              Back to Bookings
+            </Button>
+          </Group>
         </Group>
 
         {booking.deletedAt && (
