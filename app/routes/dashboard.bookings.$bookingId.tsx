@@ -555,7 +555,7 @@ export default function BookingDetail() {
                     
                     <Button
                       component={Link}
-                      to={`/dashboard/bookings?bookingId=${booking.id}`}
+                      to={`/dashboard/bookings/${booking.id}/edit`}
                       variant="light"
                       fullWidth
                     >
