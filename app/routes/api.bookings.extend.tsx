@@ -136,7 +136,6 @@ export async function action({ request }: ActionFunctionArgs) {
           type: "PAYMENT_RECEIVED",
           title: "Rent Period Extended",
           message: `Your rent period for Room ${booking.room.number} has been extended until ${format(newCheckOut, "MMM dd, yyyy")}. Additional amount: ₵${additionalAmount.toFixed(2)}`,
-          isRead: false,
         },
       });
 
@@ -147,33 +146,26 @@ export async function action({ request }: ActionFunctionArgs) {
     try {
       // Send SMS to guest if they have a phone number
       if (booking.user.phone) {
-        await mnotifyService.sendRentExtensionAlert(
-          booking.user.phone,
-          booking.user.name,
-          booking.room.number,
-          format(newCheckOut, "MMM dd, yyyy"),
-          extensionPeriods,
-          booking.room.pricingPeriod || "DAY",
-          additionalAmount,
-          paymentMethod
-        );
+        const guestName = `${booking.user.firstName} ${booking.user.lastName}`;
+        const message = `Hi ${guestName}! Your rent period for Room ${booking.room.number} has been extended until ${format(newCheckOut, "MMM dd, yyyy")}. Additional amount: ₵${additionalAmount.toFixed(2)}. Payment method: ${paymentMethod}.`;
+        
+        await mnotifyService.sendSMS({
+          recipient: booking.user.phone,
+          message: message,
+        });
         console.log(`Rent extension SMS sent to guest: ${booking.user.phone}`);
       }
 
       // Send SMS alert to admin/manager for rent extension
       const adminPhone = process.env.ADMIN_PHONE || process.env.MANAGER_PHONE;
       if (adminPhone) {
-        await mnotifyService.sendRentExtensionAdminAlert(
-          adminPhone,
-          booking.user.name,
-          booking.room.number,
-          format(newCheckOut, "MMM dd, yyyy"),
-          extensionPeriods,
-          booking.room.pricingPeriod || "DAY",
-          additionalAmount,
-          paymentMethod,
-          bookingId
-        );
+        const guestName = `${booking.user.firstName} ${booking.user.lastName}`;
+        const adminMessage = `RENT EXTENSION ALERT: Guest ${guestName} extended Room ${booking.room.number} until ${format(newCheckOut, "MMM dd, yyyy")}. Extension: ${extensionPeriods} ${booking.room.pricingPeriod?.toLowerCase() || 'day'}(s). Amount: ₵${additionalAmount.toFixed(2)}. Method: ${paymentMethod}. Booking ID: ${bookingId}`;
+        
+        await mnotifyService.sendSMS({
+          recipient: adminPhone,
+          message: adminMessage,
+        });
         console.log(`Rent extension admin SMS sent to: ${adminPhone}`);
       }
     } catch (smsError) {
