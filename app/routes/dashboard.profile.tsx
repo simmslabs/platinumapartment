@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
-import { Title, Stack, Card, Text, Group, Button, Badge, Grid } from "@mantine/core";
+import { useLoaderData, Link, useLocation, Outlet } from "@remix-run/react";
+import { Title, Stack, Card, Text, Group, Button, Badge, Grid, Alert } from "@mantine/core";
 import DashboardLayout from "~/components/DashboardLayout";
 import { requireUserId, getUser } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
@@ -52,16 +52,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function ProfilePage() {
   const { user, sessionUser } = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const passwordUpdated = params.get("passwordUpdated") === "1";
+
+  if(location.pathname !== "/dashboard/profile") return <Outlet />
 
   return (
     <DashboardLayout user={sessionUser}>
       <Stack gap="md">
+        {passwordUpdated && (
+          <Alert color="green" variant="light" title="Password Updated" maw={600}>
+            Your password was changed successfully.
+          </Alert>
+        )}
         <Group justify="space-between" align="center">
           <div>
             <Title order={2}>My Profile</Title>
             <Text c="dimmed" size="sm">View your account details</Text>
           </div>
-          <Button component={Link} to="/dashboard" variant="light">Back to Dashboard</Button>
+          <Group gap="sm">
+            <Button component={Link} to="/dashboard/profile/password" variant="default">Change Password</Button>
+            <Button component={Link} to="/dashboard" variant="light">Back to Dashboard</Button>
+          </Group>
         </Group>
 
         <Grid>

@@ -286,15 +286,17 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
                     Profile Settings
                   </Menu.Item>
                   <Menu.Divider />
-                  <Menu.Item
-                    component={Form}
-                    action="/logout"
-                    method="post"
-                    leftSection={<IconLogout size={14} />}
-                    color="red"
-                  >
-                    Logout
-                  </Menu.Item>
+                  <Form action="/logout" method="post">
+                    <Menu.Item
+                      component="button"
+                      type="submit"
+                      leftSection={<IconLogout size={14} />}
+                      color="red"
+                      style={{ width: '100%' }}
+                    >
+                      Logout
+                    </Menu.Item>
+                  </Form>
                 </Menu.Dropdown>
               </Menu>
             )}
@@ -474,15 +476,17 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
                         Profile Settings
                       </Menu.Item>
                       <Menu.Divider />
-                      <Menu.Item
-                        component={Form}
-                        action="/logout"
-                        method="post"
-                        leftSection={<IconLogout size={14} />}
-                        color="red"
-                      >
-                        Logout
-                      </Menu.Item>
+                      <Form action="/logout" method="post">
+                        <Menu.Item
+                          component="button"
+                          type="submit"
+                          leftSection={<IconLogout size={14} />}
+                          color="red"
+                          style={{ width: '100%' }}
+                        >
+                          Logout
+                        </Menu.Item>
+                      </Form>
                     </Menu.Dropdown>
                   </Menu>
                 </div>
